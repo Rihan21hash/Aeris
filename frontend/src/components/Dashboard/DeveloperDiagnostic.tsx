@@ -228,3 +228,4 @@ export const DeveloperDiagnostic: React.FC<DeveloperDiagnosticProps> = ({ aqiDat
     </div>
   );
 };
+

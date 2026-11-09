@@ -3,7 +3,7 @@ from app.models.user import User
 from app.models.location import Location, SavedLocation
 from app.models.station import MonitoringStation
 from app.models.reading import AqiReading
-from app.models.notification import NotificationSubscription, NotificationPreference
+from app.models.notification import NotificationSubscription, NotificationPreference, NotificationHistory
 
 __all__ = [
     "Base",
@@ -14,4 +14,5 @@ __all__ = [
     "AqiReading",
     "NotificationSubscription",
     "NotificationPreference",
+    "NotificationHistory",
 ]

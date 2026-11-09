@@ -123,6 +123,22 @@ export interface NotificationPreference {
   created_at: string;
 }
 
+export interface NotificationHistoryItem {
+  id: number;
+  notification_type: string;
+  aqi_value: number | null;
+  aqi_category: string | null;
+  aqi_standard: string | null;
+  primary_pollutant: string | null;
+  data_source: string | null;
+  data_timestamp: string | null;
+  message_title: string | null;
+  message_body: string | null;
+  delivery_status: string;
+  location_name: string | null;
+  created_at: string | null;
+}
+
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
 
 async function request<T>(path: string, options: RequestInit = {}, token?: string): Promise<T> {
@@ -271,6 +287,14 @@ export const api = {
         method: 'PUT',
         body: JSON.stringify(data),
       },
+      token
+    );
+  },
+
+  getNotificationHistory(token: string, limit = 50, offset = 0): Promise<NotificationHistoryItem[]> {
+    return request<NotificationHistoryItem[]>(
+      `/api/notifications/history?limit=${limit}&offset=${offset}`,
+      {},
       token
     );
   },

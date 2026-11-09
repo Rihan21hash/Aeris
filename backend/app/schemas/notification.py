@@ -45,3 +45,23 @@ class NotificationPreferenceResponse(BaseModel):
     created_at: datetime | None = None
 
     model_config = {"from_attributes": True}
+
+
+class NotificationHistoryResponse(BaseModel):
+    """A single notification history record."""
+
+    id: int
+    notification_type: str
+    aqi_value: float | None = None
+    aqi_category: str | None = None
+    aqi_standard: str | None = None
+    primary_pollutant: str | None = None
+    data_source: str | None = None
+    data_timestamp: str | None = None
+    message_title: str | None = None
+    message_body: str | None = None
+    delivery_status: str = "pending"
+    location_name: str | None = None
+    created_at: datetime | None = None
+
+    model_config = {"from_attributes": True}

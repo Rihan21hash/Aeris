@@ -5,7 +5,13 @@ Validates compliance with US EPA AQI and Indian CPCB NAQI standards.
 
 from __future__ import annotations
 
+import os
+import sys
 import unittest
+
+backend_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if backend_dir not in sys.path:
+    sys.path.insert(0, backend_dir)
 
 from app.services.aqi_calculator import (
     calculate_aqi,
@@ -15,7 +21,7 @@ from app.services.aqi_calculator import (
 )
 
 
-class TestEpaSubIndex:
+class TestEpaSubIndex(unittest.TestCase):
     """Tests for US EPA pollutant sub-index calculation."""
 
     def test_pm25_good_range(self):
@@ -53,7 +59,7 @@ class TestEpaSubIndex:
         assert calculate_sub_index("pm25", 999.0, standard="us_epa") == 500.0
 
 
-class TestCpcbSubIndex:
+class TestCpcbSubIndex(unittest.TestCase):
     """Tests for Indian CPCB NAQI pollutant sub-index calculation."""
 
     def test_cpcb_pm25_breakpoints(self):
@@ -72,7 +78,7 @@ class TestCpcbSubIndex:
         assert calculate_sub_index("no2", 20.0, standard="cpcb_naqi") == 25.0
 
 
-class TestAqiCalculation:
+class TestAqiCalculation(unittest.TestCase):
     """Tests for overall composite AQI and primary pollutant determination."""
 
     def test_epa_overall_aqi_selects_max(self):
@@ -149,3 +155,7 @@ class TestAqiCalculation:
         res = calculate_aqi({}, standard="us_epa")
         assert res.value is None
         assert res.category == "Insufficient Data"
+
+
+if __name__ == "__main__":
+    unittest.main()

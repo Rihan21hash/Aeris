@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from sqlalchemy import select
-from sqlalchemy.dialects.postgresql import insert
 
 from app.core.config import settings
 from app.core.database import async_session_factory
@@ -131,7 +130,10 @@ async def collect_all_active_locations() -> None:
 def start_scheduler() -> None:
     """Initialize and start the background scheduler."""
     if not scheduler.running:
-        from app.services.notification_service import send_daily_notifications
+        from app.services.notification_service import (
+            send_daily_notifications,
+            send_high_pollution_alerts,
+        )
 
         scheduler.add_job(
             collect_all_active_locations,
@@ -147,9 +149,16 @@ def start_scheduler() -> None:
             id="daily_notifications_job",
             replace_existing=True,
         )
+        scheduler.add_job(
+            send_high_pollution_alerts,
+            "interval",
+            minutes=15,
+            id="high_pollution_alerts_job",
+            replace_existing=True,
+        )
         scheduler.start()
         logger.info(
-            "Scheduler started: data collection (every %d mins), notifications check (every 1 min)",
+            "Scheduler started: data collection (every %d mins), daily notifications (every 1 min), pollution alerts (every 15 min)",
             settings.DATA_COLLECTION_INTERVAL_MINUTES,
         )
 

@@ -7,16 +7,16 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy import delete, select
-from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.api.deps import get_current_db_user_optional, get_current_db_user
 from app.core.database import get_db
 from app.models.location import Location
-from app.models.notification import NotificationPreference, NotificationSubscription
+from app.models.notification import NotificationHistory, NotificationPreference, NotificationSubscription
 from app.models.user import User
 from app.schemas.notification import (
+    NotificationHistoryResponse,
     NotificationPreferenceRequest,
     NotificationPreferenceResponse,
     PushSubscriptionRequest,
@@ -230,3 +230,42 @@ async def update_notification_preferences(
         frequency=pref.frequency,
         created_at=pref.created_at,
     )
+
+
+
+@router.get("/history", response_model=list[NotificationHistoryResponse])
+async def get_notification_history(
+    user: User = Depends(get_current_db_user),
+    db: AsyncSession = Depends(get_db),
+    limit: int = Query(50, ge=1, le=200, description="Max records to return"),
+    offset: int = Query(0, ge=0, description="Pagination offset"),
+):
+    """Return the authenticated user's notification history, newest first."""
+    stmt = (
+        select(NotificationHistory)
+        .where(NotificationHistory.user_id == user.id)
+        .order_by(NotificationHistory.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+    )
+    result = await db.execute(stmt)
+    records = result.scalars().all()
+
+    return [
+        NotificationHistoryResponse(
+            id=r.id,
+            notification_type=r.notification_type,
+            aqi_value=r.aqi_value,
+            aqi_category=r.aqi_category,
+            aqi_standard=r.aqi_standard,
+            primary_pollutant=r.primary_pollutant,
+            data_source=r.data_source,
+            data_timestamp=r.data_timestamp,
+            message_title=r.message_title,
+            message_body=r.message_body,
+            delivery_status=r.delivery_status,
+            location_name=r.location.name if r.location else None,
+            created_at=r.created_at,
+        )
+        for r in records
+    ]

@@ -35,6 +35,39 @@ async def get_vapid_public_key() -> dict[str, str]:
     return {"public_key": settings.VAPID_PUBLIC_KEY}
 
 
+class TestNotificationRequest(BaseModel):
+    endpoint: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
+    location_name: str | None = None
+
+
+@router.post("/test")
+async def send_test_notification_endpoint(
+    body: TestNotificationRequest,
+    user: User | None = Depends(get_current_db_user_optional),
+):
+    """Dispatch an immediate Web Push notification to test browser notification delivery."""
+    from app.services.notification_service import send_test_push
+
+    try:
+        return await send_test_push(
+            endpoint=body.endpoint,
+            lat=body.latitude,
+            lon=body.longitude,
+            location_name=body.location_name,
+            user_id=user.id if user else None,
+        )
+    except ValueError as val_err:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(val_err))
+    except Exception as exc:
+        logger.exception("Failed sending test notification: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Could not deliver test notification: {exc}",
+        )
+
+
 class UnsubscribeRequest(BaseModel):
     endpoint: str
 

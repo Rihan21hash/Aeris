@@ -1,9 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { Bell, CheckCircle2, AlertCircle, AlertTriangle, RefreshCw } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Bell, CheckCircle2, AlertCircle, AlertTriangle, RefreshCw, Send, Clock } from 'lucide-react';
 import { pushNotifications } from '../../services/notifications';
 import { api } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLocation } from '../../contexts/LocationContext';
+
+const STORAGE_TIME_KEY = 'aeris_preferred_notification_time';
+const STORAGE_SUB_ID_KEY = 'aeris_notification_sub_id';
 
 export const NotificationSetup: React.FC = () => {
   const { token } = useAuth();
@@ -11,33 +14,72 @@ export const NotificationSetup: React.FC = () => {
 
   const [isSupported, setIsSupported] = useState(false);
   const [isSubscribed, setIsSubscribed] = useState(false);
+  const [subscriptionId, setSubscriptionId] = useState<number | null>(() => {
+    const saved = localStorage.getItem(STORAGE_SUB_ID_KEY);
+    return saved ? parseInt(saved, 10) : null;
+  });
   const [permissionState, setPermissionState] = useState<NotificationPermission>('default');
-  const [preferredTime, setPreferredTime] = useState('08:00');
+  const [preferredTime, setPreferredTime] = useState<string>(() => {
+    return localStorage.getItem(STORAGE_TIME_KEY) || '08:00';
+  });
   const [statusMsg, setStatusMsg] = useState<{ type: 'success' | 'error' | 'warning'; text: string } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isTesting, setIsTesting] = useState(false);
+  const [isUpdatingTime, setIsUpdatingTime] = useState(false);
 
-  const checkStatus = () => {
+  const checkStatus = useCallback(async () => {
     const supported = pushNotifications.isSupported();
     setIsSupported(supported);
+
     if (supported) {
       const perm = pushNotifications.getPermissionState();
       setPermissionState(perm);
-      pushNotifications.getCurrentSubscription().then((sub) => {
-        setIsSubscribed(Boolean(sub));
-      });
+
+      try {
+        const sub = await pushNotifications.getCurrentSubscription();
+        const hasSub = Boolean(sub);
+        setIsSubscribed(hasSub);
+
+        // If authenticated, check if user has a saved preference on the server
+        if (token) {
+          try {
+            const prefs = await api.getNotificationPreferences(token);
+            if (prefs && prefs.length > 0) {
+              const activePref = prefs.find((p) => p.enabled) || prefs[0];
+              if (activePref.preferred_time) {
+                setPreferredTime(activePref.preferred_time);
+                localStorage.setItem(STORAGE_TIME_KEY, activePref.preferred_time);
+              }
+              if (activePref.subscription_id) {
+                setSubscriptionId(activePref.subscription_id);
+                localStorage.setItem(STORAGE_SUB_ID_KEY, String(activePref.subscription_id));
+              }
+            }
+          } catch (prefErr) {
+            console.warn('Could not load preferences from backend:', prefErr);
+          }
+        }
+      } catch (err) {
+        console.warn('Error checking push subscription:', err);
+      }
     }
-  };
+  }, [token]);
 
   useEffect(() => {
     checkStatus();
-  }, []);
+  }, [checkStatus]);
+
+  const handleTimeChange = (newTime: string) => {
+    setPreferredTime(newTime);
+    localStorage.setItem(STORAGE_TIME_KEY, newTime);
+  };
 
   const handleSubscribe = async () => {
     setIsLoading(true);
     setStatusMsg(null);
 
     try {
-      // 1. Fetch valid VAPID public key from backend or env
+      // 1. Fetch valid VAPID public key
       let vapidKey = import.meta.env.VITE_VAPID_PUBLIC_KEY;
       if (!vapidKey || vapidKey === 'demo-vapid-key') {
         try {
@@ -54,19 +96,23 @@ export const NotificationSetup: React.FC = () => {
         throw new Error('VAPID public key is not configured on the server.');
       }
 
-      // 2. Request permission and subscribe
+      // 2. Request permission and subscribe in browser
       const sub = await pushNotifications.subscribe(vapidKey);
       if (sub) {
         setIsSubscribed(true);
         setPermissionState('granted');
+        localStorage.setItem(STORAGE_TIME_KEY, preferredTime);
 
-        // Send subscription to backend
+        // 3. Register subscription on backend
         const res = await api.subscribePush(sub.toJSON(), token || undefined);
+        const subId = res.subscription_id;
+        if (subId) {
+          setSubscriptionId(subId);
+          localStorage.setItem(STORAGE_SUB_ID_KEY, String(subId));
 
-        // Update default preferences with user's preferred time and location
-        if (res.subscription_id) {
+          // 4. Save delivery time and location preference
           await api.updateNotificationPreferences(
-            res.subscription_id,
+            subId,
             {
               location_id: location.locationId,
               enabled: true,
@@ -80,7 +126,7 @@ export const NotificationSetup: React.FC = () => {
 
         setStatusMsg({
           type: 'success',
-          text: `Daily notifications active! You will receive daily air quality updates at ${preferredTime}.`,
+          text: `Daily notifications active! You will receive daily air quality updates for ${location.name || 'your location'} at ${preferredTime}.`,
         });
       }
     } catch (err: any) {
@@ -104,6 +150,73 @@ export const NotificationSetup: React.FC = () => {
     }
   };
 
+  const handleUpdateTime = async () => {
+    if (!subscriptionId) {
+      // Re-subscribe or re-save
+      await handleSubscribe();
+      return;
+    }
+
+    setIsUpdatingTime(true);
+    setStatusMsg(null);
+    try {
+      await api.updateNotificationPreferences(
+        subscriptionId,
+        {
+          location_id: location.locationId,
+          enabled: true,
+          preferred_time: preferredTime,
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+          frequency: 'daily',
+        },
+        token || undefined
+      );
+      localStorage.setItem(STORAGE_TIME_KEY, preferredTime);
+      setStatusMsg({
+        type: 'success',
+        text: `Delivery time updated to ${preferredTime} for ${location.name || 'your location'}.`,
+      });
+    } catch (err: any) {
+      console.error('Failed to update preference time:', err);
+      setStatusMsg({
+        type: 'error',
+        text: 'Failed to update delivery time. Please try again.',
+      });
+    } finally {
+      setIsUpdatingTime(false);
+    }
+  };
+
+  const handleSendTestNotification = async () => {
+    setIsTesting(true);
+    setStatusMsg(null);
+    try {
+      const sub = await pushNotifications.getCurrentSubscription();
+      const res = await api.sendTestNotification(
+        {
+          endpoint: sub?.endpoint,
+          latitude: location.latitude ?? 28.6139,
+          longitude: location.longitude ?? 77.2090,
+          location_name: location.name || 'Current Location',
+        },
+        token || undefined
+      );
+
+      setStatusMsg({
+        type: 'success',
+        text: `${res.detail || 'Test notification delivered!'} Check your system notification banner / tray.`,
+      });
+    } catch (err: any) {
+      console.error('Test notification failed:', err);
+      setStatusMsg({
+        type: 'error',
+        text: err.message || 'Failed to dispatch test notification. Please verify browser notification permissions.',
+      });
+    } finally {
+      setIsTesting(false);
+    }
+  };
+
   const handleUnsubscribe = async () => {
     setIsLoading(true);
     setStatusMsg(null);
@@ -114,6 +227,8 @@ export const NotificationSetup: React.FC = () => {
         await pushNotifications.unsubscribe();
       }
       setIsSubscribed(false);
+      setSubscriptionId(null);
+      localStorage.removeItem(STORAGE_SUB_ID_KEY);
       setStatusMsg({
         type: 'success',
         text: 'You have been unsubscribed from air quality notifications.',
@@ -174,7 +289,7 @@ export const NotificationSetup: React.FC = () => {
             Daily Air Quality Alerts
           </h6>
           <span style={{ fontSize: '0.85rem', color: '#687078' }}>
-            Get a single morning notification with live AQI and health recommendations.
+            Receive a single daily briefing with verified AQI and health recommendations.
           </span>
         </div>
       </div>
@@ -194,12 +309,12 @@ export const NotificationSetup: React.FC = () => {
             <strong>Notifications are currently blocked in your browser</strong>
           </div>
           <p className="mb-2" style={{ lineHeight: 1.5 }}>
-            Your browser previously blocked notification permissions for this address. To receive daily updates:
+            Your browser previously blocked notification permissions for this address. To receive alerts:
           </p>
           <ol className="mb-2 ps-3" style={{ lineHeight: 1.6 }}>
             <li>Click the <strong>tune / site settings</strong> icon (or lock icon) on the left of your browser address bar.</li>
             <li>Change <strong>Notifications</strong> from <em>Block</em> to <strong>Allow</strong>.</li>
-            <li>Click the refresh button below to re-check permissions.</li>
+            <li>Click the button below to re-check permissions.</li>
           </ol>
           <button
             type="button"
@@ -230,24 +345,89 @@ export const NotificationSetup: React.FC = () => {
 
       {isSubscribed ? (
         <div>
-          <div className="d-flex align-items-center gap-2 mb-3 text-success" style={{ fontSize: '0.9rem' }}>
-            <CheckCircle2 size={18} />
-            <span>Active for <strong>{location.name}</strong> at <strong>{preferredTime}</strong></span>
-          </div>
-          <button
-            onClick={handleUnsubscribe}
-            disabled={isLoading}
-            className="btn btn-outline-danger btn-sm"
+          <div
+            className="d-flex align-items-center gap-2 p-2 px-3 mb-3"
+            style={{
+              backgroundColor: '#F0FDF4',
+              border: '1px solid #BBF7D0',
+              borderRadius: '6px',
+              fontSize: '0.875rem',
+              color: '#166534',
+            }}
           >
-            {isLoading ? 'Processing...' : 'Disable Notifications'}
-          </button>
+            <CheckCircle2 size={18} color="#16a34a" />
+            <span>
+              Notifications active for <strong>{location.name || 'Current Location'}</strong> at{' '}
+              <strong>{preferredTime}</strong> ({Intl.DateTimeFormat().resolvedOptions().timeZone || 'Local Time'}).
+            </span>
+          </div>
+
+          <div className="card p-3 mb-3" style={{ backgroundColor: '#F9FAFB', border: '1px solid #E5E7EB' }}>
+            <label htmlFor="prefTimeSubscribed" className="form-label d-flex align-items-center gap-1" style={{ fontSize: '0.85rem', fontWeight: 600, color: '#374151' }}>
+              <Clock size={15} />
+              <span>Change Scheduled Delivery Time:</span>
+            </label>
+            <div className="d-flex align-items-center gap-2 flex-wrap">
+              <input
+                id="prefTimeSubscribed"
+                type="time"
+                value={preferredTime}
+                onChange={(e) => handleTimeChange(e.target.value)}
+                className="form-control form-control-sm"
+                style={{ width: '140px', backgroundColor: '#FFFFFF' }}
+              />
+              <button
+                type="button"
+                onClick={handleUpdateTime}
+                disabled={isUpdatingTime}
+                className="btn btn-sm"
+                style={{
+                  backgroundColor: '#285B50',
+                  color: '#FFFFFF',
+                  fontWeight: 500,
+                }}
+              >
+                {isUpdatingTime ? 'Saving...' : 'Update Time'}
+              </button>
+            </div>
+            <small className="text-muted mt-1" style={{ fontSize: '0.75rem' }}>
+              Time is saved in local settings and synced with the notification scheduler.
+            </small>
+          </div>
+
+          <div className="d-flex align-items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={handleSendTestNotification}
+              disabled={isTesting}
+              className="btn btn-sm d-inline-flex align-items-center gap-1"
+              style={{
+                backgroundColor: '#285B50',
+                color: '#FFFFFF',
+                fontWeight: 600,
+                padding: '6px 14px',
+              }}
+            >
+              <Send size={14} />
+              <span>{isTesting ? 'Sending...' : 'Send Test Notification Now'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleUnsubscribe}
+              disabled={isLoading}
+              className="btn btn-outline-danger btn-sm"
+            >
+              {isLoading ? 'Processing...' : 'Disable Notifications'}
+            </button>
+          </div>
         </div>
       ) : (
         <div>
           <div className="row g-3 align-items-center mb-3">
             <div className="col-auto">
               <label htmlFor="prefTime" style={{ fontSize: '0.85rem', color: '#687078' }}>
-                Preferred time:
+                Preferred briefing time:
               </label>
             </div>
             <div className="col-auto">
@@ -255,25 +435,33 @@ export const NotificationSetup: React.FC = () => {
                 id="prefTime"
                 type="time"
                 value={preferredTime}
-                onChange={(e) => setPreferredTime(e.target.value)}
+                onChange={(e) => handleTimeChange(e.target.value)}
                 className="form-control form-control-sm"
                 style={{ width: '130px' }}
               />
             </div>
+            <div className="col-auto">
+              <span className="text-muted" style={{ fontSize: '0.8rem' }}>
+                ({Intl.DateTimeFormat().resolvedOptions().timeZone || 'Local'})
+              </span>
+            </div>
           </div>
 
-          <button
-            onClick={handleSubscribe}
-            disabled={isLoading}
-            style={{
-              backgroundColor: '#285B50',
-              borderColor: '#285B50',
-              color: '#FFFFFF',
-            }}
-            className="btn btn-sm px-3"
-          >
-            {isLoading ? 'Enabling...' : 'Enable Daily Notifications'}
-          </button>
+          <div className="d-flex align-items-center gap-2 flex-wrap">
+            <button
+              onClick={handleSubscribe}
+              disabled={isLoading}
+              style={{
+                backgroundColor: '#285B50',
+                borderColor: '#285B50',
+                color: '#FFFFFF',
+                fontWeight: 600,
+              }}
+              className="btn btn-sm px-3"
+            >
+              {isLoading ? 'Enabling...' : 'Enable Daily Notifications'}
+            </button>
+          </div>
         </div>
       )}
     </div>

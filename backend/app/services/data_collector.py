@@ -131,6 +131,8 @@ async def collect_all_active_locations() -> None:
 def start_scheduler() -> None:
     """Initialize and start the background scheduler."""
     if not scheduler.running:
+        from app.services.notification_service import send_daily_notifications
+
         scheduler.add_job(
             collect_all_active_locations,
             "interval",
@@ -138,9 +140,16 @@ def start_scheduler() -> None:
             id="aqi_data_collector",
             replace_existing=True,
         )
+        scheduler.add_job(
+            send_daily_notifications,
+            "interval",
+            minutes=1,
+            id="daily_notifications_job",
+            replace_existing=True,
+        )
         scheduler.start()
         logger.info(
-            "Scheduler started with interval %d minutes",
+            "Scheduler started: data collection (every %d mins), notifications check (every 1 min)",
             settings.DATA_COLLECTION_INTERVAL_MINUTES,
         )
 

@@ -229,6 +229,20 @@ export const api = {
     });
   },
 
+  sendTestNotification(
+    data: { endpoint?: string; latitude?: number; longitude?: number; location_name?: string },
+    token?: string
+  ): Promise<{ status: string; detail: string }> {
+    return request<{ status: string; detail: string }>(
+      '/api/notifications/test',
+      {
+        method: 'POST',
+        body: JSON.stringify(data),
+      },
+      token
+    );
+  },
+
   getNotificationPreferences(token: string): Promise<NotificationPreference[]> {
     return request<NotificationPreference[]>('/api/notifications/preferences', {}, token);
   },

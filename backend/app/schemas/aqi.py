@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -44,6 +45,7 @@ class AqiCurrentResponse(BaseModel):
     longitude: float | None = None
     pollutants: PollutantsResponse | None = None
     health_recommendation: str | None = None
+    diagnostics: dict[str, Any] | None = Field(None, description="Developer diagnostic data for data origin transparency.")
 
 
 class AqiHistoryPoint(BaseModel):

@@ -5,6 +5,7 @@ import { AqiCard } from '../components/AqiCard/AqiCard';
 import { HealthRecommendation } from '../components/HealthRecommendation/HealthRecommendation';
 import { PollutantCard } from '../components/PollutantCard/PollutantCard';
 import { AqiChart } from '../components/Charts/AqiChart';
+import { DeveloperDiagnostic } from '../components/Dashboard/DeveloperDiagnostic';
 import { useHistory } from '../hooks/useHistory';
 import { formatCoordinates, formatDateTime } from '../utils/formatters';
 import { MapPin, Clock, AlertCircle } from 'lucide-react';
@@ -108,6 +109,13 @@ export const Dashboard: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Developer Diagnostic & Audit Panel */}
+      <DeveloperDiagnostic
+        aqiData={currentAqi}
+        lat={location.latitude}
+        lon={location.longitude}
+      />
 
       {/* Pollutant Breakdown Section */}
       <div className="mb-4">

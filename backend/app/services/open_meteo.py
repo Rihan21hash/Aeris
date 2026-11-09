@@ -104,6 +104,9 @@ def _normalise_current(data: dict) -> dict:
             "so2": so2_raw,
             "o3": o3_raw,
         },
+        # Full raw provider payload blocks for diagnostic transparency
+        "raw_provider_current": data.get("current", {}),
+        "raw_provider_units": data.get("current_units", {}),
     }
     return result
 

@@ -33,6 +33,19 @@ export interface AqiCurrentData {
   longitude: number | null;
   pollutants: PollutantsData | null;
   health_recommendation: string | null;
+  diagnostics?: {
+    requested_coordinates?: { latitude: number; longitude: number };
+    resolved_location?: { id: number; name: string; country_code: string; latitude: number; longitude: number };
+    data_source?: string;
+    provider_underlying_model?: string;
+    measurement_type?: string;
+    provider_timestamp?: string;
+    data_retrieval_timestamp?: string;
+    selected_pollutant_values_ug_m3?: Record<string, number | null>;
+    raw_api_response?: Record<string, any>;
+    raw_api_units?: Record<string, any>;
+    discrepancy_explanation?: string;
+  };
 }
 
 export interface AqiHistoryPoint {

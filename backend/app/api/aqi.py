@@ -163,6 +163,41 @@ async def get_current_aqi(
         source="open_meteo",
     )
 
+    diagnostics = {
+        "requested_coordinates": {
+            "latitude": lat,
+            "longitude": lon,
+        },
+        "resolved_location": {
+            "id": location.id,
+            "name": location.name,
+            "country_code": location.country_code,
+            "latitude": location.latitude,
+            "longitude": location.longitude,
+        },
+        "data_source": "Open-Meteo Air Quality API",
+        "provider_underlying_model": "Copernicus Atmosphere Monitoring Service (CAMS) / ECMWF (11km-40km grid)",
+        "measurement_type": "model_estimate",
+        "provider_timestamp": str(raw_data.get("raw_provider_current", {}).get("time") or current.get("measured_at")),
+        "data_retrieval_timestamp": datetime.now(timezone.utc).isoformat(),
+        "selected_pollutant_values_ug_m3": {
+            "pm2_5": pollutants_map.get("pm25"),
+            "pm10": pollutants_map.get("pm10"),
+            "carbon_monoxide": pollutants_map.get("co"),
+            "nitrogen_dioxide": pollutants_map.get("no2"),
+            "sulphur_dioxide": pollutants_map.get("so2"),
+            "ozone": pollutants_map.get("o3"),
+        },
+        "raw_api_response": raw_data.get("raw_provider_current", {}),
+        "raw_api_units": raw_data.get("raw_provider_units", {}),
+        "discrepancy_explanation": (
+            "AERIS displays authentic, unmanipulated numerical model data returned directly by Open-Meteo for these coordinates. "
+            "Other platforms reporting higher numbers (e.g. Kolhapur AQI 211, PM2.5 131) measure from physical ground monitoring stations "
+            "(such as CPCB/MPCB CAAQMS at Shivaji University, Kolhapur). Point-source ground stations capture local, street-level emission plumes "
+            "(traffic, road dust, biomass burning) that are smoothed out across regional 11-40km grid cells in global atmospheric dispersion models."
+        ),
+    }
+
     return AqiCurrentResponse(
         aqi_value=aqi_res.value,
         aqi_standard=standard,
@@ -178,6 +213,7 @@ async def get_current_aqi(
         longitude=location.longitude,
         pollutants=pollutants_resp,
         health_recommendation=health_rec,
+        diagnostics=diagnostics,
     )
 
 

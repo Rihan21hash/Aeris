@@ -1,0 +1,16 @@
+{
+  "name": "AERIS",
+  "short_name": "AERIS",
+  "description": "Real-time air quality intelligence — monitor AQI, track pollutants, and understand the air around you.",
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#285B50",
+  "background_color": "#F5F6F7",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

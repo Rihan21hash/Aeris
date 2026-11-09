@@ -105,3 +105,4 @@ async def delete_current_user(
     await db.execute(delete(User).where(User.id == user.id))
     await db.commit()
     return None
+

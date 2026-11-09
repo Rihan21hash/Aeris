@@ -106,3 +106,4 @@ async def get_current_db_user_optional(
     stmt = select(User).where(User.firebase_uid == uid)
     result = await session.execute(stmt)
     return result.scalars().first()
+

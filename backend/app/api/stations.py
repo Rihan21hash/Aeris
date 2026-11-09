@@ -72,3 +72,4 @@ async def get_nearby_stations(
     except Exception:
         logger.exception("Failed querying cached monitoring stations")
         return {"stations": stations, "count": len(stations)}
+

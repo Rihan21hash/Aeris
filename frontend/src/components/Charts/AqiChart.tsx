@@ -219,3 +219,4 @@ export const AqiChart: React.FC<AqiChartProps> = ({
     </div>
   );
 };
+

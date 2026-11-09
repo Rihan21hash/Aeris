@@ -48,3 +48,4 @@ export const HealthRecommendation: React.FC<HealthRecommendationProps> = ({
     </div>
   );
 };
+

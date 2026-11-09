@@ -38,3 +38,4 @@ export function useHistory(locationId: number | null, range: '24h' | '7d') {
 
   return { history, extremes, isLoading, error, refetch: fetchData };
 }
+

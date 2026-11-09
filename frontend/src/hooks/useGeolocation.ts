@@ -41,3 +41,4 @@ export function useGeolocation() {
 
   return { position, isLoading, error, requestLocation };
 }
+

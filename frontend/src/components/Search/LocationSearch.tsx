@@ -166,3 +166,4 @@ export const LocationSearch: React.FC<LocationSearchProps> = ({
     </div>
   );
 };
+

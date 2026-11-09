@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: aeris-backend
+    env: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt greenlet aiosqlite
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: SECRET_KEY
+        generateValue: true
+      - key: CORS_ORIGINS
+        sync: false
+      - key: OPEN_METEO_BASE_URL
+        value: https://air-quality-api.open-meteo.com/v1/air-quality
+      - key: OPENAQ_BASE_URL
+        value: https://api.openaq.org/v3
+      - key: NOMINATIM_BASE_URL
+        value: https://nominatim.openstreetmap.org
+      - key: DATA_COLLECTION_INTERVAL_MINUTES
+        value: "60"

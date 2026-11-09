@@ -82,3 +82,4 @@ export function formatPollutantValue(value: number | null | undefined, unit: str
   if (value === null || value === undefined || isNaN(value)) return 'Not measured';
   return `${Number(value.toFixed(1))} ${unit}`;
 }
+

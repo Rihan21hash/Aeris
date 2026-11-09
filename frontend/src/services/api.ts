@@ -269,3 +269,4 @@ export const api = {
     return request<{ status: string; database: string }>('/api/health');
   },
 };
+

@@ -126,3 +126,4 @@ async def send_daily_notifications() -> None:
 
         except Exception:
             logger.exception("Error during daily push notifications job")
+

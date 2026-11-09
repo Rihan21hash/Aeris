@@ -150,3 +150,4 @@ export const AqiMap: React.FC<AqiMapProps> = ({
     </div>
   );
 };
+

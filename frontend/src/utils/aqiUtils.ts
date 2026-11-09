@@ -89,3 +89,4 @@ export function formatAqiValue(value: number | null | undefined): string {
   if (value === null || value === undefined || isNaN(value)) return '—';
   return Math.round(value).toString();
 }
+

@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { getFriendlyAuthErrorMessage } from '../utils/firebaseErrors';
 import { Eye, EyeOff, AlertCircle } from 'lucide-react';
 
 export const Login: React.FC = () => {
-  const { signInWithEmail, signInWithGoogle, resetPassword, isFirebaseReady } = useAuth();
+  const { signInWithEmail, signInWithGoogle, resetPassword } = useAuth();
   const navigate = useNavigate();
 
   const [email, setEmail] = useState('');
@@ -24,7 +25,7 @@ export const Login: React.FC = () => {
       navigate('/');
     } catch (err: any) {
       console.error('Login error:', err);
-      setError(err.message || 'Failed to authenticate. Please check your credentials.');
+      setError(getFriendlyAuthErrorMessage(err));
     } finally {
       setIsLoading(false);
     }
@@ -38,7 +39,7 @@ export const Login: React.FC = () => {
       navigate('/');
     } catch (err: any) {
       console.error('Google sign-in error:', err);
-      setError(err.message || 'Google sign-in failed.');
+      setError(getFriendlyAuthErrorMessage(err));
     } finally {
       setIsLoading(false);
     }
@@ -54,7 +55,7 @@ export const Login: React.FC = () => {
       await resetPassword(email);
       setResetSent(true);
     } catch (err: any) {
-      setError(err.message || 'Failed to send password reset email.');
+      setError(getFriendlyAuthErrorMessage(err));
     }
   };
 
@@ -95,7 +96,7 @@ export const Login: React.FC = () => {
 
         {error && (
           <div className="alert alert-danger d-flex align-items-center gap-2 p-2 mb-3" style={{ fontSize: '0.85rem' }}>
-            <AlertCircle size={16} />
+            <AlertCircle size={16} style={{ flexShrink: 0 }} />
             <span>{error}</span>
           </div>
         )}
@@ -167,7 +168,7 @@ export const Login: React.FC = () => {
 
           <button
             type="submit"
-            disabled={isLoading || !isFirebaseReady}
+            disabled={isLoading}
             className="btn w-100 mb-3"
             style={{
               backgroundColor: '#285B50',
@@ -202,7 +203,7 @@ export const Login: React.FC = () => {
         <button
           type="button"
           onClick={handleGoogle}
-          disabled={isLoading || !isFirebaseReady}
+          disabled={isLoading}
           className="btn w-100 d-flex align-items-center justify-content-center gap-2 mb-4"
           style={{
             border: '1px solid #E2E5E8',
@@ -213,7 +214,6 @@ export const Login: React.FC = () => {
             padding: '10px',
           }}
         >
-          {/* Google G Logo SVG */}
           <svg width="18" height="18" viewBox="0 0 24 24">
             <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.17z" />
             <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24z" />
@@ -233,4 +233,3 @@ export const Login: React.FC = () => {
     </div>
   );
 };
-

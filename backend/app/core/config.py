@@ -31,7 +31,7 @@ class Settings(BaseSettings):
         return [origin.strip() for origin in self.CORS_ORIGINS.split(",") if origin.strip()]
 
     # ── Firebase ──────────────────────────────────────────────────────
-    FIREBASE_PROJECT_ID: str = ""
+    FIREBASE_PROJECT_ID: str = "aeris-41aed"
     FIREBASE_SERVICE_ACCOUNT_KEY_PATH: str = ""
 
     # ── VAPID / Web Push ──────────────────────────────────────────────

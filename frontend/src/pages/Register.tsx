@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { getFriendlyAuthErrorMessage } from '../utils/firebaseErrors';
 import { Eye, EyeOff, AlertCircle } from 'lucide-react';
 
 export const Register: React.FC = () => {
-  const { signUpWithEmail, signInWithGoogle, isFirebaseReady } = useAuth();
+  const { signUpWithEmail, signInWithGoogle } = useAuth();
   const navigate = useNavigate();
 
   const [name, setName] = useState('');
@@ -20,7 +21,7 @@ export const Register: React.FC = () => {
     setError(null);
 
     if (password !== confirmPassword) {
-      setError('Passwords do not match.');
+      setError('Passwords do not match. Please re-enter.');
       return;
     }
 
@@ -35,7 +36,7 @@ export const Register: React.FC = () => {
       navigate('/');
     } catch (err: any) {
       console.error('Registration error:', err);
-      setError(err.message || 'Failed to create account. Please try again.');
+      setError(getFriendlyAuthErrorMessage(err));
     } finally {
       setIsLoading(false);
     }
@@ -49,7 +50,7 @@ export const Register: React.FC = () => {
       navigate('/');
     } catch (err: any) {
       console.error('Google sign-in error:', err);
-      setError(err.message || 'Google sign-in failed.');
+      setError(getFriendlyAuthErrorMessage(err));
     } finally {
       setIsLoading(false);
     }
@@ -91,7 +92,7 @@ export const Register: React.FC = () => {
 
         {error && (
           <div className="alert alert-danger d-flex align-items-center gap-2 p-2 mb-3" style={{ fontSize: '0.85rem' }}>
-            <AlertCircle size={16} />
+            <AlertCircle size={16} style={{ flexShrink: 0 }} />
             <span>{error}</span>
           </div>
         )}
@@ -176,7 +177,7 @@ export const Register: React.FC = () => {
 
           <button
             type="submit"
-            disabled={isLoading || !isFirebaseReady}
+            disabled={isLoading}
             className="btn w-100 mb-3"
             style={{
               backgroundColor: '#285B50',
@@ -211,7 +212,7 @@ export const Register: React.FC = () => {
         <button
           type="button"
           onClick={handleGoogle}
-          disabled={isLoading || !isFirebaseReady}
+          disabled={isLoading}
           className="btn w-100 d-flex align-items-center justify-content-center gap-2 mb-4"
           style={{
             border: '1px solid #E2E5E8',
@@ -241,4 +242,3 @@ export const Register: React.FC = () => {
     </div>
   );
 };
-

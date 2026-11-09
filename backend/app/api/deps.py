@@ -75,7 +75,7 @@ async def get_current_db_user(
     session: AsyncSession = Depends(get_db),
 ) -> User:
     """Fetch or raise 404 for the authenticated user from the database."""
-    uid = claims.get("uid")
+    uid = claims.get("uid") or claims.get("sub") or claims.get("user_id")
     if not uid:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -99,10 +99,13 @@ async def get_current_db_user_optional(
     session: AsyncSession = Depends(get_db),
 ) -> User | None:
     """Return User or None if anonymous or not synced."""
-    if not claims or not claims.get("uid"):
+    if not claims:
         return None
 
-    uid = claims.get("uid")
+    uid = claims.get("uid") or claims.get("sub") or claims.get("user_id")
+    if not uid:
+        return None
+
     stmt = select(User).where(User.firebase_uid == uid)
     result = await session.execute(stmt)
     return result.scalars().first()

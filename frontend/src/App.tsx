@@ -1,6 +1,5 @@
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider } from './contexts/AuthContext';
 import { LocationProvider } from './contexts/LocationContext';
 import { AqiProvider } from './contexts/AqiContext';
 import { Layout } from './components/Layout/Layout';
@@ -18,27 +17,25 @@ import { Register } from './pages/Register';
 
 export const App: React.FC = () => {
   return (
-    <AuthProvider>
-      <LocationProvider>
-        <AqiProvider>
-          <Layout>
-            <Routes>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/explore" element={<Explore />} />
-              <Route path="/history" element={<History />} />
-              <Route path="/pollutants" element={<Pollutants />} />
-              <Route path="/locations" element={<SavedLocations />} />
-              <Route path="/notifications" element={<NotificationsPage />} />
-              <Route path="/settings" element={<SettingsPage />} />
-              <Route path="/about" element={<About />} />
-              <Route path="/login" element={<Login />} />
-              <Route path="/register" element={<Register />} />
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-          </Layout>
-        </AqiProvider>
-      </LocationProvider>
-    </AuthProvider>
+    <LocationProvider>
+      <AqiProvider>
+        <Layout>
+          <Routes>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/explore" element={<Explore />} />
+            <Route path="/history" element={<History />} />
+            <Route path="/pollutants" element={<Pollutants />} />
+            <Route path="/locations" element={<SavedLocations />} />
+            <Route path="/notifications" element={<NotificationsPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/about" element={<About />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </Layout>
+      </AqiProvider>
+    </LocationProvider>
   );
 };
 

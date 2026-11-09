@@ -20,3 +20,4 @@ services:
         value: https://nominatim.openstreetmap.org
       - key: DATA_COLLECTION_INTERVAL_MINUTES
         value: "60"
+

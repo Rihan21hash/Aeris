@@ -11,6 +11,7 @@ class UserResponse(BaseModel):
     """Public representation of a user."""
 
     id: int
+    firebase_uid: str | None = None
     email: str | None = None
     display_name: str | None = None
     photo_url: str | None = None

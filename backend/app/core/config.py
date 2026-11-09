@@ -35,9 +35,9 @@ class Settings(BaseSettings):
     FIREBASE_SERVICE_ACCOUNT_KEY_PATH: str = ""
 
     # ── VAPID / Web Push ──────────────────────────────────────────────
-    VAPID_PRIVATE_KEY: str = ""
-    VAPID_PUBLIC_KEY: str = ""
-    VAPID_CLAIM_EMAIL: str = ""
+    VAPID_PRIVATE_KEY: str = "ZmVdRqklAG6suy5MX8xS7mG7S_8IWavxzlYbEdOjM3c"
+    VAPID_PUBLIC_KEY: str = "BOQzabmyIUoLqaewKVtmMkEGxfS-nfEvt6msStc7WpdExPNmu4hlsp37auMGnLRq292BOVPuAQcGWtrX2nwjMnY"
+    VAPID_CLAIM_EMAIL: str = "mailto:admin@aeris.org"
 
     # ── External APIs ─────────────────────────────────────────────────
     OPEN_METEO_BASE_URL: str = "https://air-quality-api.open-meteo.com/v1/air-quality"

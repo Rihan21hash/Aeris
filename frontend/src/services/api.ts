@@ -201,6 +201,10 @@ export const api = {
   },
 
   // Push notifications
+  getVapidPublicKey(): Promise<{ public_key: string }> {
+    return request<{ public_key: string }>('/api/notifications/vapid-public-key');
+  },
+
   subscribePush(subscription: PushSubscriptionJSON, token?: string): Promise<{ status: string; subscription_id: number }> {
     return request<{ status: string; subscription_id: number }>(
       '/api/notifications/subscribe',

@@ -27,6 +27,14 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/notifications", tags=["Notifications"])
 
 
+@router.get("/vapid-public-key")
+async def get_vapid_public_key() -> dict[str, str]:
+    """Return the application's VAPID public key for Web Push subscription."""
+    from app.core.config import settings
+
+    return {"public_key": settings.VAPID_PUBLIC_KEY}
+
+
 class UnsubscribeRequest(BaseModel):
     endpoint: str
 

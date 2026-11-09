@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Bell, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Bell, CheckCircle2, AlertCircle, AlertTriangle, RefreshCw } from 'lucide-react';
 import { pushNotifications } from '../../services/notifications';
 import { api } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
@@ -11,18 +11,25 @@ export const NotificationSetup: React.FC = () => {
 
   const [isSupported, setIsSupported] = useState(false);
   const [isSubscribed, setIsSubscribed] = useState(false);
+  const [permissionState, setPermissionState] = useState<NotificationPermission>('default');
   const [preferredTime, setPreferredTime] = useState('08:00');
-  const [statusMsg, setStatusMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [statusMsg, setStatusMsg] = useState<{ type: 'success' | 'error' | 'warning'; text: string } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  useEffect(() => {
+  const checkStatus = () => {
     const supported = pushNotifications.isSupported();
     setIsSupported(supported);
     if (supported) {
+      const perm = pushNotifications.getPermissionState();
+      setPermissionState(perm);
       pushNotifications.getCurrentSubscription().then((sub) => {
         setIsSubscribed(Boolean(sub));
       });
     }
+  };
+
+  useEffect(() => {
+    checkStatus();
   }, []);
 
   const handleSubscribe = async () => {
@@ -30,10 +37,28 @@ export const NotificationSetup: React.FC = () => {
     setStatusMsg(null);
 
     try {
-      const vapidKey = import.meta.env.VITE_VAPID_PUBLIC_KEY || 'demo-vapid-key';
+      // 1. Fetch valid VAPID public key from backend or env
+      let vapidKey = import.meta.env.VITE_VAPID_PUBLIC_KEY;
+      if (!vapidKey || vapidKey === 'demo-vapid-key') {
+        try {
+          const keyData = await api.getVapidPublicKey();
+          if (keyData?.public_key) {
+            vapidKey = keyData.public_key;
+          }
+        } catch (keyErr) {
+          console.warn('Could not fetch VAPID key from backend:', keyErr);
+        }
+      }
+
+      if (!vapidKey) {
+        throw new Error('VAPID public key is not configured on the server.');
+      }
+
+      // 2. Request permission and subscribe
       const sub = await pushNotifications.subscribe(vapidKey);
       if (sub) {
         setIsSubscribed(true);
+        setPermissionState('granted');
 
         // Send subscription to backend
         const res = await api.subscribePush(sub.toJSON(), token || undefined);
@@ -60,10 +85,20 @@ export const NotificationSetup: React.FC = () => {
       }
     } catch (err: any) {
       console.error('Push subscription failed:', err);
-      setStatusMsg({
-        type: 'error',
-        text: err.message || 'Failed to activate notifications. Please ensure browser permissions are allowed.',
-      });
+      const perm = pushNotifications.getPermissionState();
+      setPermissionState(perm);
+
+      if (perm === 'denied') {
+        setStatusMsg({
+          type: 'error',
+          text: 'Notification permission is blocked by your browser. Please allow notifications in your browser address bar settings and refresh.',
+        });
+      } else {
+        setStatusMsg({
+          type: 'error',
+          text: err.message || 'Failed to activate notifications. Please ensure permissions are granted.',
+        });
+      }
     } finally {
       setIsLoading(false);
     }
@@ -143,6 +178,45 @@ export const NotificationSetup: React.FC = () => {
           </span>
         </div>
       </div>
+
+      {permissionState === 'denied' && (
+        <div
+          className="alert alert-warning mb-3"
+          style={{
+            fontSize: '0.85rem',
+            backgroundColor: '#FFFBEB',
+            borderColor: '#FDE68A',
+            color: '#92400E',
+          }}
+        >
+          <div className="d-flex align-items-center gap-2 mb-2">
+            <AlertTriangle size={18} style={{ flexShrink: 0, color: '#D97706' }} />
+            <strong>Notifications are currently blocked in your browser</strong>
+          </div>
+          <p className="mb-2" style={{ lineHeight: 1.5 }}>
+            Your browser previously blocked notification permissions for this address. To receive daily updates:
+          </p>
+          <ol className="mb-2 ps-3" style={{ lineHeight: 1.6 }}>
+            <li>Click the <strong>tune / site settings</strong> icon (or lock icon) on the left of your browser address bar.</li>
+            <li>Change <strong>Notifications</strong> from <em>Block</em> to <strong>Allow</strong>.</li>
+            <li>Click the refresh button below to re-check permissions.</li>
+          </ol>
+          <button
+            type="button"
+            onClick={checkStatus}
+            className="btn btn-sm d-inline-flex align-items-center gap-1"
+            style={{
+              backgroundColor: '#D97706',
+              color: '#FFFFFF',
+              fontSize: '0.8rem',
+              fontWeight: 500,
+            }}
+          >
+            <RefreshCw size={13} />
+            <span>Re-check Permission</span>
+          </button>
+        </div>
+      )}
 
       {statusMsg && (
         <div

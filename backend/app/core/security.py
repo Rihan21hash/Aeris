@@ -97,6 +97,7 @@ def verify_firebase_token(token: str) -> dict[str, Any]:
             algorithms=["RS256"],
             audience=project_id,
             issuer=f"https://securetoken.google.com/{project_id}",
+            leeway=30,  # Allow 30 seconds of clock skew between Firebase and this server
             options={
                 "verify_aud": True,
                 "verify_iss": True,

@@ -6,7 +6,7 @@ import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, Auth } from 'firebase/auth';
 
 export const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || 'AIzaSyCIACP8n8grcqDMwAzkULtOZBwnWkr1x2F0',
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || 'AIzaSyCIACPn8grcqDMwAzkULtOZBwnWkr1x2F0',
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || 'aeris-41aed.firebaseapp.com',
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || 'aeris-41aed',
   storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || 'aeris-41aed.firebasestorage.app',

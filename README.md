@@ -142,7 +142,3 @@ Each standard uses its own breakpoint tables and category definitions.
 - **Backend**: Render
 - **Database**: Neon PostgreSQL
 
-## License
-
-MIT
-

@@ -12,6 +12,7 @@ from app.models.base import Base
 
 class NotificationSubscription(Base):
     __tablename__ = "notification_subscriptions"
+    
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int | None] = mapped_column(

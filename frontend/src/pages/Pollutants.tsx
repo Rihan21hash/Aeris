@@ -1,6 +1,7 @@
 import React from 'react';
 import { useAqi } from '../contexts/AqiContext';
 import { useLocation } from '../contexts/LocationContext';
+import { getAqiCardColors } from '../utils/aqiUtils';
 
 export const Pollutants: React.FC = () => {
   const { pollutants } = useAqi();
@@ -61,11 +62,11 @@ export const Pollutants: React.FC = () => {
   return (
     <div className="container-fluid p-0">
       <div className="mb-4">
-        <h4 style={{ fontWeight: 700, color: '#202124', marginBottom: '4px' }}>
+        <h4 style={{ fontWeight: 800, color: 'var(--color-text-primary)', marginBottom: '4px' }}>
           Pollutant Monitoring & Intelligence
         </h4>
-        <p style={{ color: '#687078', fontSize: '0.9rem', marginBottom: 0 }}>
-          Individual pollutant concentrations and environmental toxicology for <strong>{location.name}</strong>.
+        <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.95rem', marginBottom: 0 }}>
+          Individual pollutant concentrations and environmental toxicology for <strong style={{ color: 'var(--color-text-primary)' }}>{location.name}</strong>.
         </p>
       </div>
 
@@ -78,10 +79,10 @@ export const Pollutants: React.FC = () => {
               <div
                 style={{
                   backgroundColor: '#FFFFFF',
-                  borderRadius: '8px',
-                  border: '1px solid #E2E5E8',
+                  borderRadius: 'var(--border-radius)',
+                  border: '1px solid var(--color-border)',
                   padding: '24px',
-                  boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
+                  boxShadow: 'var(--shadow-sm)',
                   height: '100%',
                   display: 'flex',
                   flexDirection: 'column',
@@ -91,19 +92,19 @@ export const Pollutants: React.FC = () => {
                 <div>
                   <div className="d-flex justify-content-between align-items-start mb-2">
                     <div>
-                      <h5 style={{ fontWeight: 700, color: '#202124', fontSize: '1.1rem', marginBottom: '2px' }}>
+                      <h5 style={{ fontWeight: 800, color: 'var(--color-text-primary)', fontSize: '1.15rem', marginBottom: '2px' }}>
                         {info.title}
                       </h5>
-                      <span style={{ fontSize: '0.8rem', color: '#687078' }}>{info.subtitle}</span>
+                      <span style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)' }}>{info.subtitle}</span>
                     </div>
 
                     <div style={{ textAlign: 'right' }}>
-                      <span style={{ fontSize: '0.75rem', color: '#687078', display: 'block' }}>Concentration</span>
+                      <span style={{ fontSize: '0.78rem', color: 'var(--color-text-secondary)', display: 'block', fontWeight: 600 }}>Concentration</span>
                       <span
                         style={{
-                          fontSize: '1.4rem',
-                          fontWeight: 700,
-                          color: reading?.concentration !== null && reading?.concentration !== undefined ? '#202124' : '#9CA3AF',
+                          fontSize: '1.5rem',
+                          fontWeight: 800,
+                          color: reading?.concentration !== null && reading?.concentration !== undefined ? 'var(--color-text-primary)' : 'var(--color-text-muted)',
                           fontVariantNumeric: 'tabular-nums',
                         }}
                       >
@@ -111,31 +112,46 @@ export const Pollutants: React.FC = () => {
                           ? `${Number(reading.concentration.toFixed(1))} ${reading.unit}`
                           : 'Not measured'}
                       </span>
-                      {reading?.aqi_contribution !== null && reading?.aqi_contribution !== undefined && (
-                        <div style={{ fontSize: '0.75rem', color: '#285B50', fontWeight: 600 }}>
-                          Sub-index: {Math.round(reading.aqi_contribution)}
-                        </div>
-                      )}
+                      {reading?.aqi_contribution !== null && reading?.aqi_contribution !== undefined && (() => {
+                        const subColors = getAqiCardColors(reading.aqi_contribution);
+                        return (
+                          <div
+                            style={{
+                              fontSize: '0.8rem',
+                              color: subColors.numberColor,
+                              backgroundColor: subColors.bg,
+                              border: `1px solid ${subColors.border}`,
+                              borderRadius: '4px',
+                              padding: '2px 6px',
+                              display: 'inline-block',
+                              marginTop: '4px',
+                              fontWeight: 700,
+                            }}
+                          >
+                            Sub-index: {Math.round(reading.aqi_contribution)}
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
 
-                  <p style={{ fontSize: '0.85rem', color: '#4B5563', lineHeight: 1.5, margin: '14px 0 10px' }}>
+                  <p style={{ fontSize: '0.9rem', color: 'var(--color-text-secondary)', lineHeight: 1.6, margin: '14px 0 10px' }}>
                     {info.description}
                   </p>
                 </div>
 
-                <div className="mt-3 pt-3" style={{ borderTop: '1px solid #F0F2F4' }}>
+                <div className="mt-3 pt-3" style={{ borderTop: '1px solid var(--color-border)' }}>
                   <div className="mb-2">
-                    <strong style={{ fontSize: '0.75rem', color: '#687078', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    <strong style={{ fontSize: '0.78rem', color: 'var(--color-text-primary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                       Emission Sources
                     </strong>
-                    <div style={{ fontSize: '0.8rem', color: '#202124', marginTop: '2px' }}>{info.sources}</div>
+                    <div style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)', marginTop: '2px' }}>{info.sources}</div>
                   </div>
                   <div>
-                    <strong style={{ fontSize: '0.75rem', color: '#687078', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    <strong style={{ fontSize: '0.78rem', color: 'var(--color-text-primary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                       Health Impacts
                     </strong>
-                    <div style={{ fontSize: '0.8rem', color: '#202124', marginTop: '2px' }}>{info.health}</div>
+                    <div style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)', marginTop: '2px' }}>{info.health}</div>
                   </div>
                 </div>
               </div>

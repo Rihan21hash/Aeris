@@ -1,5 +1,5 @@
 import React from 'react';
-import { formatAqiValue, getAqiCategory } from '../../utils/aqiUtils';
+import { formatAqiValue, getAqiCategory, getAqiCardColors } from '../../utils/aqiUtils';
 import { formatDateTime, formatRelativeTime } from '../../utils/formatters';
 import { DataSourceBadge } from '../DataSourceBadge/DataSourceBadge';
 
@@ -9,7 +9,6 @@ interface AqiCardProps {
   measurementType?: 'station' | 'model_estimate';
   source?: string;
   measuredAt?: string | null;
-  standard?: 'us_epa' | 'cpcb_naqi';
   isLoading?: boolean;
 }
 
@@ -19,18 +18,18 @@ export const AqiCard: React.FC<AqiCardProps> = ({
   measurementType = 'model_estimate',
   source = 'open_meteo',
   measuredAt,
-  standard = 'us_epa',
   isLoading = false,
 }) => {
-  const category = getAqiCategory(value, standard);
+  const category = getAqiCategory(value);
+  const cardColors = getAqiCardColors(value);
 
   // Freshness indicator logic
   const getFreshnessStatus = () => {
-    if (!measuredAt) return { color: '#687078', label: 'Unknown freshness' };
+    if (!measuredAt) return { color: 'var(--color-text-muted)', label: 'Unknown freshness' };
     const diffHours = (new Date().getTime() - new Date(measuredAt).getTime()) / (1000 * 3600);
-    if (diffHours < 2) return { color: '#00A651', label: 'Fresh' };
-    if (diffHours < 6) return { color: '#F5D000', label: 'Moderate latency' };
-    return { color: '#E53935', label: 'Delayed data' };
+    if (diffHours < 2) return { color: 'var(--color-aqi-good)', label: 'Live Data' };
+    if (diffHours < 6) return { color: 'var(--color-aqi-moderate)', label: 'Moderate Latency' };
+    return { color: 'var(--color-aqi-unhealthy)', label: 'Delayed Data' };
   };
 
   const freshness = getFreshnessStatus();
@@ -40,21 +39,21 @@ export const AqiCard: React.FC<AqiCardProps> = ({
       <div
         style={{
           backgroundColor: '#FFFFFF',
-          border: '1px solid #E2E5E8',
-          borderRadius: '8px',
-          padding: '28px',
+          border: '1px solid var(--color-border)',
+          borderRadius: 'var(--border-radius)',
+          padding: '36px',
           minHeight: '260px',
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'center',
           alignItems: 'center',
-          boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
+          boxShadow: 'var(--shadow-sm)',
         }}
       >
-        <div className="spinner-border" style={{ color: '#285B50' }} role="status">
+        <div className="spinner-border" style={{ color: 'var(--color-primary)' }} role="status">
           <span className="visually-hidden">Loading air quality...</span>
         </div>
-        <p className="mt-3 mb-0" style={{ color: '#687078', fontSize: '0.9rem' }}>
+        <p className="mt-3 mb-0" style={{ color: 'var(--color-text-secondary)', fontSize: '0.95rem' }}>
           Retrieving live air quality readings...
         </p>
       </div>
@@ -64,12 +63,13 @@ export const AqiCard: React.FC<AqiCardProps> = ({
   return (
     <div
       style={{
-        backgroundColor: '#FFFFFF',
-        border: '1px solid #E2E5E8',
-        borderRadius: '8px',
+        backgroundColor: cardColors.bg,
+        border: 'none',
+        borderRadius: 'var(--border-radius)',
         padding: '28px',
-        boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
+        boxShadow: 'var(--shadow-sm)',
         position: 'relative',
+        transition: 'background-color 0.4s ease',
       }}
     >
       {/* Top Header */}
@@ -77,27 +77,27 @@ export const AqiCard: React.FC<AqiCardProps> = ({
         <div>
           <span
             style={{
-              fontSize: '0.8rem',
-              fontWeight: 600,
+              fontSize: '0.85rem',
+              fontWeight: 700,
               textTransform: 'uppercase',
-              letterSpacing: '0.05em',
-              color: '#687078',
+              letterSpacing: '0.06em',
+              color: 'var(--color-text-secondary)',
             }}
           >
-            Air Quality Index ({standard === 'cpcb_naqi' ? 'CPCB NAQI' : 'US EPA'})
+            Air Quality Index (US EPA)
           </span>
         </div>
         <div className="d-flex align-items-center gap-2">
           <span
             style={{
-              width: '8px',
-              height: '8px',
+              width: '10px',
+              height: '10px',
               borderRadius: '50%',
               backgroundColor: freshness.color,
             }}
             title={freshness.label}
           />
-          <span style={{ fontSize: '0.75rem', color: '#687078' }}>
+          <span style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary)', fontWeight: 500 }}>
             {formatRelativeTime(measuredAt)}
           </span>
         </div>
@@ -107,12 +107,13 @@ export const AqiCard: React.FC<AqiCardProps> = ({
       <div className="d-flex align-items-baseline gap-4 mb-3">
         <div
           style={{
-            fontSize: '4.5rem',
+            fontSize: '5rem',
             fontWeight: 800,
             lineHeight: 1,
-            color: '#202124',
+            color: cardColors.numberColor,
             fontVariantNumeric: 'tabular-nums',
             letterSpacing: '-0.03em',
+            transition: 'color 0.4s ease',
           }}
         >
           {formatAqiValue(value)}
@@ -122,20 +123,21 @@ export const AqiCard: React.FC<AqiCardProps> = ({
           <div className="d-inline-flex align-items-center gap-2 mb-1">
             <span
               style={{
-                width: '12px',
-                height: '12px',
-                borderRadius: '3px',
-                backgroundColor: category.color,
+                width: '14px',
+                height: '14px',
+                borderRadius: '4px',
+                backgroundColor: cardColors.color,
+                transition: 'background-color 0.4s ease',
               }}
             />
-            <span style={{ fontSize: '1.25rem', fontWeight: 700, color: '#202124' }}>
+            <span style={{ fontSize: '1.45rem', fontWeight: 800, color: 'var(--color-text-primary)' }}>
               {category.label}
             </span>
           </div>
           {primaryPollutant && (
-            <div style={{ fontSize: '0.85rem', color: '#687078' }}>
+            <div style={{ fontSize: '0.9rem', color: 'var(--color-text-secondary)' }}>
               Primary pollutant:{' '}
-              <strong style={{ color: '#202124' }}>{primaryPollutant.toUpperCase()}</strong>
+              <strong style={{ color: 'var(--color-text-primary)' }}>{primaryPollutant.toUpperCase()}</strong>
             </div>
           )}
         </div>
@@ -144,12 +146,12 @@ export const AqiCard: React.FC<AqiCardProps> = ({
       {/* Meta Footer */}
       <div
         className="pt-3 mt-3 d-flex flex-wrap justify-content-between align-items-center gap-2"
-        style={{ borderTop: '1px solid #E2E5E8' }}
+        style={{ borderTop: '1px solid rgba(0, 0, 0, 0.06)' }}
       >
         <DataSourceBadge source={source} measurementType={measurementType} />
 
-        <div style={{ fontSize: '0.8rem', color: '#687078' }}>
-          Measured at: {formatDateTime(measuredAt)}
+        <div style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)' }}>
+          Measured at: <strong style={{ color: 'var(--color-text-primary)' }}>{formatDateTime(measuredAt)}</strong>
         </div>
       </div>
     </div>

@@ -6,7 +6,7 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -40,6 +40,64 @@ class TestNotificationRequest(BaseModel):
     latitude: float | None = None
     longitude: float | None = None
     location_name: str | None = None
+    standard: str | None = None
+
+
+class VerifySubscriptionRequest(BaseModel):
+    endpoint: str
+
+
+@router.post("/verify-subscription")
+async def verify_subscription_endpoint(
+    body: VerifySubscriptionRequest,
+    user: User | None = Depends(get_current_db_user_optional),
+    db: AsyncSession = Depends(get_db),
+):
+    """Verify whether a browser push subscription is registered and active in the database."""
+    stmt = select(NotificationSubscription).where(
+        NotificationSubscription.endpoint == body.endpoint
+    )
+    sub = (await db.execute(stmt)).scalars().first()
+    if not sub:
+        return {
+            "registered": False,
+            "enabled": False,
+            "subscription_id": None,
+            "last_delivery_status": None,
+        }
+
+    if not sub.enabled:
+        return {
+            "registered": True,
+            "enabled": False,
+            "subscription_id": sub.id,
+            "last_delivery_status": "expired",
+        }
+
+    # If authenticated user, ensure subscription is mapped to this user
+    if user and sub.user_id != user.id:
+        sub.user_id = user.id
+        await db.commit()
+
+    # Look up the most recent delivery status for this user or subscription
+    hist_stmt = (
+        select(NotificationHistory.delivery_status)
+        .where(
+            NotificationHistory.user_id == sub.user_id
+            if sub.user_id
+            else NotificationHistory.location_id.is_not(None)
+        )
+        .order_by(NotificationHistory.id.desc())
+        .limit(1)
+    )
+    last_status = (await db.execute(hist_stmt)).scalars().first()
+
+    return {
+        "registered": True,
+        "enabled": sub.enabled,
+        "subscription_id": sub.id,
+        "last_delivery_status": last_status or "pending",
+    }
 
 
 @router.post("/test")
@@ -57,9 +115,21 @@ async def send_test_notification_endpoint(
             lon=body.longitude,
             location_name=body.location_name,
             user_id=user.id if user else None,
+            standard="us_epa",
         )
     except ValueError as val_err:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(val_err))
+    except RuntimeError as r_err:
+        err_msg = str(r_err)
+        if "HTTP 410" in err_msg or "HTTP 404" in err_msg or "No such subscription" in err_msg or "expired" in err_msg.lower():
+            raise HTTPException(
+                status_code=status.HTTP_410_GONE,
+                detail="Push service rejected delivery (HTTP 410): The subscription has expired or was revoked by your browser. Please click 'Re-enable Notifications' to register a fresh subscription.",
+            )
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Could not deliver test notification: {err_msg}",
+        )
     except Exception as exc:
         logger.exception("Failed sending test notification: %s", exc)
         raise HTTPException(
@@ -81,7 +151,18 @@ async def subscribe_push(
     """Register or re-activate a Web Push subscription."""
     user_id = user.id if user else None
 
-    # Find existing subscription or create new
+    # Deactivate older subscriptions for this user so only the newest active endpoint is tracked
+    if user_id:
+        await db.execute(
+            update(NotificationSubscription)
+            .where(
+                NotificationSubscription.user_id == user_id,
+                NotificationSubscription.endpoint != body.endpoint,
+            )
+            .values(enabled=False)
+        )
+
+    # Find existing subscription by endpoint or create new
     stmt = select(NotificationSubscription).where(
         NotificationSubscription.endpoint == body.endpoint
     )
@@ -104,7 +185,7 @@ async def subscribe_push(
     await db.commit()
     await db.refresh(sub)
 
-    # Ensure default preference exists for this subscription
+    # Ensure default preference exists for this subscription and is enabled
     if sub:
         pref_res = await db.execute(
             select(NotificationPreference).where(NotificationPreference.subscription_id == sub.id)
@@ -120,6 +201,10 @@ async def subscribe_push(
                 frequency="daily",
             )
             db.add(new_pref)
+        else:
+            pref.enabled = True
+            if user_id:
+                pref.user_id = user_id
 
     await db.commit()
     return {"status": "subscribed", "subscription_id": sub.id if sub else None}
@@ -130,11 +215,19 @@ async def unsubscribe_push(
     body: UnsubscribeRequest,
     db: AsyncSession = Depends(get_db),
 ):
-    """Remove a push subscription by its endpoint."""
-    await db.execute(
-        delete(NotificationSubscription).where(NotificationSubscription.endpoint == body.endpoint)
+    """Remove or deactivate a push subscription by its endpoint."""
+    sub_res = await db.execute(
+        select(NotificationSubscription).where(NotificationSubscription.endpoint == body.endpoint)
     )
-    await db.commit()
+    sub = sub_res.scalars().first()
+    if sub:
+        sub.enabled = False
+        await db.execute(
+            update(NotificationPreference)
+            .where(NotificationPreference.subscription_id == sub.id)
+            .values(enabled=False)
+        )
+        await db.commit()
     return {"status": "unsubscribed"}
 
 

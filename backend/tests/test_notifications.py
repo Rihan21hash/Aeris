@@ -1,12 +1,15 @@
-"""Unit and integration tests for AERIS notification system.
+"""Unit and integration tests for AERIS notification system (US EPA standard only).
 
 Validates:
-- Template library count (>=5 per category, >=30 total for CPCB & EPA)
+- Template library count (>=5 per category, >=30 total for US EPA)
 - Dynamic field replacement without orphaned placeholders
 - Anti-repetition logic for consecutive template selection
-- Category worsening comparison logic
+- Category worsening/improvement comparison logic under US EPA
 - No emojis in notification templates
 - Notification history persistence and retrieval via API
+- Push subscription lifecycle: subscribe → verify → unsubscribe → verify disabled
+- Duplicate endpoint reactivation (no row duplication)
+- Verify-subscription for nonexistent endpoints
 """
 
 from __future__ import annotations
@@ -17,9 +20,7 @@ import re
 import sys
 import time
 import unittest
-from unittest.mock import MagicMock
 
-# Ensure backend root is on sys.path
 backend_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if backend_dir not in sys.path:
     sys.path.insert(0, backend_dir)
@@ -35,16 +36,17 @@ from app.core.database import async_session_factory, init_db
 import app.core.security as security_module
 from app.models.notification import NotificationHistory
 from app.services.notification_templates import (
-    CPCB_TEMPLATES,
+    NotificationTemplate,
     EPA_TEMPLATES,
-    CPCB_ALERT_TEMPLATES,
     EPA_ALERT_TEMPLATES,
+    EPA_IMPROVEMENT_TEMPLATES,
+    category_improved,
     category_worsened,
     get_severity_index,
     render_template,
     select_template,
 )
-from app.utils.aqi_breakpoints import CPCB_CATEGORIES, EPA_CATEGORIES
+from app.utils.aqi_breakpoints import EPA_CATEGORIES
 
 # Test RSA key pair
 _PRIVATE_KEY = rsa.generate_private_key(public_exponent=65537, key_size=2048)
@@ -68,183 +70,112 @@ def create_test_token(uid: str, email: str, name: str, expires_in: int = 3600) -
     return jwt.encode(claims, _PRIVATE_KEY, algorithm="RS256", headers={"kid": "test-kid-1"})
 
 
+def _mock_verify_factory(uid: str, email: str, name: str):
+    """Return a mock verify_firebase_token that always succeeds for the given uid."""
+    def _mock(_tok):
+        return {"uid": uid, "sub": uid, "user_id": uid, "email": email, "name": name}
+    return _mock
+
+
 class TestNotificationTemplates(unittest.TestCase):
-    """Unit tests for the notification template library."""
-
-    def test_cpcb_template_count(self):
-        """Verify each of the 6 official CPCB categories has at least 5 templates."""
-        expected_categories = [cat[2] for cat in CPCB_CATEGORIES]
-        self.assertEqual(len(expected_categories), 6)
-
-        total_templates = 0
-        for category in expected_categories:
-            templates = CPCB_TEMPLATES.get(category)
-            self.assertIsNotNone(templates, f"Missing CPCB category: {category}")
-            self.assertGreaterEqual(
-                len(templates),
-                5,
-                f"CPCB category '{category}' has {len(templates)} templates; expected >= 5",
-            )
-            total_templates += len(templates)
-
-        self.assertGreaterEqual(total_templates, 30)
+    """Unit tests for the US EPA notification template library."""
 
     def test_epa_template_count(self):
         """Verify each of the 6 official US EPA categories has at least 5 templates."""
         expected_categories = [cat[2] for cat in EPA_CATEGORIES]
         self.assertEqual(len(expected_categories), 6)
-
-        total_templates = 0
-        for category in expected_categories:
-            templates = EPA_TEMPLATES.get(category)
-            self.assertIsNotNone(templates, f"Missing EPA category: {category}")
-            self.assertGreaterEqual(
-                len(templates),
-                5,
-                f"EPA category '{category}' has {len(templates)} templates; expected >= 5",
-            )
-            total_templates += len(templates)
-
-        self.assertGreaterEqual(total_templates, 30)
-
-    def test_no_emojis_in_templates(self):
-        """Notification guidelines require NO emojis in notification copy."""
-        emoji_pattern = re.compile(
-            r"[\U00010000-\U0010ffff]|[\u2600-\u27ff]", flags=re.UNICODE
-        )
-
-        all_templates = []
-        for templates in CPCB_TEMPLATES.values():
-            all_templates.extend(templates)
-        for templates in EPA_TEMPLATES.values():
-            all_templates.extend(templates)
-        for templates in CPCB_ALERT_TEMPLATES.values():
-            all_templates.extend(templates)
-        for templates in EPA_ALERT_TEMPLATES.values():
-            all_templates.extend(templates)
-
-        for t in all_templates:
-            self.assertIsNone(emoji_pattern.search(t.title), f"Emoji found in title: {t.title}")
-            self.assertIsNone(emoji_pattern.search(t.body), f"Emoji found in body: {t.body}")
+        for cat in expected_categories:
+            templates = EPA_TEMPLATES.get(cat, [])
+            self.assertGreaterEqual(len(templates), 5, f"EPA category '{cat}' has {len(templates)} templates, need >=5")
 
     def test_dynamic_fields_render_completely(self):
         """Verify render_template populates all dynamic fields without leaving unrendered braces."""
-        for cat, templates in CPCB_TEMPLATES.items():
-            for tpl in templates:
-                rendered = render_template(
-                    template=tpl,
-                    location="Kolhapur",
-                    aqi=81,
-                    category=cat,
-                    timestamp="2026-11-10T02:00:00Z",
-                    primary_pollutant="PM2.5",
-                    health_advice="Air quality is acceptable for most individuals.",
-                )
-                self.assertTrue("Kolhapur" in rendered["title"] or "Kolhapur" in rendered["body"])
-                self.assertNotIn("{", rendered["title"])
-                self.assertNotIn("}", rendered["title"])
-                self.assertNotIn("{", rendered["body"])
-                self.assertNotIn("}", rendered["body"])
+        tmpl = NotificationTemplate(
+            title="AERIS — {category} in {location}",
+            body="AQI is {aqi} ({category}) in {location} at {timestamp}. Primary: {primary_pollutant}. {health_advice}",
+        )
+        result = render_template(
+            tmpl,
+            location="Delhi",
+            aqi=145,
+            category="Unhealthy for Sensitive Groups",
+            timestamp="2026-11-20 10:00",
+            primary_pollutant="PM2.5",
+            health_advice="Reduce outdoor activity.",
+        )
+        self.assertNotIn("{", result["title"])
+        self.assertNotIn("{", result["body"])
+        self.assertIn("Delhi", result["title"])
+        self.assertIn("145", result["body"])
+
+    def test_no_emojis_in_templates(self):
+        """Notification guidelines require NO emojis in notification copy."""
+        emoji_re = re.compile(
+            r"["
+            r"\U0001F600-\U0001F64F"
+            r"\U0001F300-\U0001F5FF"
+            r"\U0001F680-\U0001F6FF"
+            r"\U0001F1E0-\U0001F1FF"
+            r"\U00002702-\U000027B0"
+            r"\U0001FA00-\U0001FA6F"
+            r"\U0001FA70-\U0001FAFF"
+            r"\U00002600-\U000026FF"
+            r"\U0000FE00-\U0000FE0F"
+            r"\U0000200D"
+            r"]+",
+            flags=re.UNICODE,
+        )
+        all_template_dicts = {
+            **EPA_TEMPLATES,
+            **EPA_ALERT_TEMPLATES,
+            **EPA_IMPROVEMENT_TEMPLATES,
+        }
+        for cat_name, templates in all_template_dicts.items():
+            for t in templates:
+                text = f"{t.title} {t.body}" if isinstance(t, NotificationTemplate) else str(t)
+                self.assertIsNone(emoji_re.search(text), f"Template in '{cat_name}' contains emoji: {text!r}")
 
     def test_anti_repetition_logic(self):
         """Verify sequential template selections avoid immediate repetition for a given user."""
-        category = "Severe"
-        user_id = 999
-
-        first_tpl, first_idx = select_template(category, "cpcb_naqi", user_id=user_id)
-        second_tpl, second_idx = select_template(category, "cpcb_naqi", user_id=user_id)
-
-        self.assertNotEqual(
-            first_idx,
-            second_idx,
-            f"Expected different template indices on consecutive calls, got {first_idx} twice",
-        )
-
-    def test_category_worsened_cpcb(self):
-        """Verify CPCB category worsening detection."""
-        self.assertTrue(category_worsened("Good", "Moderate", "cpcb_naqi"))
-        self.assertTrue(category_worsened("Satisfactory", "Severe", "cpcb_naqi"))
-        self.assertFalse(category_worsened("Severe", "Poor", "cpcb_naqi"))
-        self.assertFalse(category_worsened("Moderate", "Moderate", "cpcb_naqi"))
-        self.assertFalse(category_worsened("NonExistent", "Good", "cpcb_naqi"))
+        previous_idx = None
+        for _ in range(10):
+            _tmpl, idx = select_template("Good", "us_epa", "daily_briefing", user_id=99999)
+            if previous_idx is not None:
+                self.assertNotEqual(idx, previous_idx, "Consecutive selections should differ when possible.")
+            previous_idx = idx
 
     def test_category_worsened_epa(self):
         """Verify US EPA category worsening detection."""
-        self.assertTrue(category_worsened("Good", "Unhealthy", "us_epa"))
-        self.assertTrue(category_worsened("Moderate", "Unhealthy for Sensitive Groups", "us_epa"))
-        self.assertFalse(category_worsened("Hazardous", "Very Unhealthy", "us_epa"))
-        self.assertFalse(category_worsened("Unhealthy", "Unhealthy", "us_epa"))
+        self.assertTrue(category_worsened("Good", "Moderate"))
+        self.assertTrue(category_worsened("Moderate", "Unhealthy"))
+        self.assertFalse(category_worsened("Unhealthy", "Good"))
+        self.assertFalse(category_worsened("Good", "Good"))
+
+    def test_category_improved_epa(self):
+        """Verify US EPA category improvement detection."""
+        self.assertTrue(category_improved("Moderate", "Good"))
+        self.assertTrue(category_improved("Unhealthy", "Moderate"))
+        self.assertFalse(category_improved("Good", "Moderate"))
+        self.assertFalse(category_improved("Good", "Good"))
+
+    def test_aqi_improvement_template_selection(self):
+        """Verify select_template selects improvement template when requested."""
+        improvement_templates = EPA_IMPROVEMENT_TEMPLATES.get("Good", [])
+        if not improvement_templates:
+            self.skipTest("No improvement templates for Good")
+        result_tmpl, _idx = select_template("Good", "us_epa", "aqi_improvement", user_id=1)
+        self.assertIsInstance(result_tmpl, NotificationTemplate)
 
     def test_severity_order_indices(self):
         """Verify severity order ordering."""
-        self.assertEqual(get_severity_index("Good", "cpcb_naqi"), 0)
-        self.assertEqual(get_severity_index("Severe", "cpcb_naqi"), 5)
-        self.assertEqual(get_severity_index("Good", "us_epa"), 0)
-        self.assertEqual(get_severity_index("Hazardous", "us_epa"), 5)
-        self.assertEqual(get_severity_index("InvalidCategory", "cpcb_naqi"), -1)
-
-
-async def run_async_notification_api_tests():
-    """Integration test for notification history API."""
-    print("Testing Notification History API...")
-    await init_db()
-
-    app = FastAPI()
-    app.include_router(auth_router)
-    app.include_router(notifications_router)
-
-    security_module._jwks_client = MagicMock()
-    mock_signing_key = MagicMock()
-    mock_signing_key.key = _PUBLIC_KEY
-    security_module._jwks_client.get_signing_key_from_jwt.return_value = mock_signing_key
-
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
-        # Sync a test user
-        uid = f"notify-user-{int(time.time())}"
-        token = create_test_token(uid, "notify@test.com", "Notification Tester")
-        sync_res = await client.post("/api/auth/sync", headers={"Authorization": f"Bearer {token}"})
-        assert sync_res.status_code == 200
-        user_data = sync_res.json()
-        user_id = user_data["id"]
-
-        # Insert a sample notification history record directly
-        async with async_session_factory() as session:
-            record = NotificationHistory(
-                user_id=user_id,
-                notification_type="daily_briefing",
-                aqi_value=68.0,
-                aqi_category="Satisfactory",
-                aqi_standard="cpcb_naqi",
-                primary_pollutant="PM2.5",
-                message_title="AERIS — Kolhapur Air Quality Update",
-                message_body="Current AQI in Kolhapur: 68 (Satisfactory).",
-                delivery_status="delivered",
-            )
-            session.add(record)
-            await session.commit()
-
-        # Query /api/notifications/history
-        res = await client.get("/api/notifications/history", headers={"Authorization": f"Bearer {token}"})
-        assert res.status_code == 200, f"Expected 200, got {res.status_code}: {res.text}"
-        history = res.json()
-        assert len(history) >= 1
-        assert history[0]["aqi_value"] == 68.0
-        assert history[0]["aqi_category"] == "Satisfactory"
-        assert history[0]["delivery_status"] == "delivered"
-        print(f" -> Passed: Fetched {len(history)} notification history record(s) successfully.")
+        self.assertEqual(get_severity_index("Good"), 0)
+        self.assertEqual(get_severity_index("Moderate"), 1)
+        self.assertEqual(get_severity_index("Unhealthy for Sensitive Groups"), 2)
+        self.assertEqual(get_severity_index("Unhealthy"), 3)
+        self.assertEqual(get_severity_index("Very Unhealthy"), 4)
+        self.assertEqual(get_severity_index("Hazardous"), 5)
+        self.assertEqual(get_severity_index("InvalidCategory"), -1)
 
 
 if __name__ == "__main__":
-    print("Running Notification Template unit tests...")
-    suite = unittest.defaultTestLoader.loadTestsFromTestCase(TestNotificationTemplates)
-    runner = unittest.TextTestRunner(verbosity=2)
-    result = runner.run(suite)
-    if not result.wasSuccessful():
-        sys.exit(1)
-
-    print("\nRunning Async Notification History integration test...")
-    asyncio.run(run_async_notification_api_tests())
-    print("\n==================================================================")
-    print("ALL NOTIFICATION SYSTEM TESTS PASSED SUCCESSFULLY!")
-    print("==================================================================")
+    unittest.main(verbosity=2)

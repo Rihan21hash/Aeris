@@ -63,21 +63,21 @@ export const SavedLocations: React.FC = () => {
         style={{
           maxWidth: '520px',
           backgroundColor: '#FFFFFF',
-          borderRadius: '8px',
-          border: '1px solid #E2E5E8',
+          borderRadius: 'var(--border-radius)',
+          border: '1px solid var(--color-border)',
+          boxShadow: 'var(--shadow-sm)',
         }}
       >
-        <MapPin size={40} color="#285B50" className="mb-3" />
-        <h5 style={{ fontWeight: 700, color: '#202124' }}>Synchronize Favorite Locations</h5>
-        <p style={{ color: '#687078', fontSize: '0.9rem', marginBottom: '20px' }}>
+        <MapPin size={42} color="var(--color-primary)" className="mb-3" />
+        <h5 style={{ fontWeight: 800, color: 'var(--color-text-primary)' }}>Synchronize Favorite Locations</h5>
+        <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.95rem', marginBottom: '22px' }}>
           Create a free AERIS account or sign in to save your monitored homes, workplaces, and travel destinations.
         </p>
         <NavLink
           to="/login"
-          className="btn btn-sm px-4"
-          style={{ backgroundColor: '#285B50', color: '#FFFFFF', fontWeight: 600 }}
+          className="btn btn-primary btn-sm px-4"
         >
-          <LogIn size={15} className="me-2" />
+          <LogIn size={16} className="me-2" />
           Sign In / Create Account
         </NavLink>
       </div>
@@ -88,18 +88,17 @@ export const SavedLocations: React.FC = () => {
     <div className="container-fluid p-0">
       <div className="d-flex justify-content-between align-items-center mb-4">
         <div>
-          <h4 style={{ fontWeight: 700, color: '#202124', marginBottom: '4px' }}>
+          <h4 style={{ fontWeight: 800, color: 'var(--color-text-primary)', marginBottom: '4px' }}>
             My Locations
           </h4>
-          <span style={{ fontSize: '0.85rem', color: '#687078' }}>
+          <span style={{ fontSize: '0.9rem', color: 'var(--color-text-secondary)' }}>
             Pinned monitoring points synced to your account.
           </span>
         </div>
 
         <button
           onClick={() => setShowAddModal(true)}
-          className="btn btn-sm d-flex align-items-center gap-2"
-          style={{ backgroundColor: '#285B50', color: '#FFFFFF', fontWeight: 600 }}
+          className="btn btn-primary btn-sm d-flex align-items-center gap-2"
         >
           <Plus size={16} />
           <span>Add Location</span>
@@ -111,11 +110,12 @@ export const SavedLocations: React.FC = () => {
           className="p-4 mb-4"
           style={{
             backgroundColor: '#FFFFFF',
-            borderRadius: '8px',
-            border: '1px solid #285B50',
+            borderRadius: 'var(--border-radius)',
+            border: '2px solid var(--color-primary)',
+            boxShadow: 'var(--shadow-md)',
           }}
         >
-          <h6 style={{ fontWeight: 600, color: '#202124', marginBottom: '12px' }}>
+          <h6 style={{ fontWeight: 800, color: 'var(--color-text-primary)', marginBottom: '12px' }}>
             Search & Save a New Location
           </h6>
           <LocationSearch
@@ -137,7 +137,7 @@ export const SavedLocations: React.FC = () => {
           />
           <button
             onClick={() => setShowAddModal(false)}
-            className="btn btn-sm btn-link text-muted mt-2 p-0"
+            className="btn btn-sm btn-link text-secondary mt-2 p-0"
           >
             Cancel
           </button>
@@ -146,18 +146,18 @@ export const SavedLocations: React.FC = () => {
 
       {isLoading ? (
         <div className="p-5 text-center">
-          <div className="spinner-border text-secondary" role="status" />
+          <div className="spinner-border" style={{ color: 'var(--color-primary)' }} role="status" />
         </div>
       ) : savedLocations.length === 0 ? (
         <div
           className="text-center p-5"
           style={{
             backgroundColor: '#FFFFFF',
-            borderRadius: '8px',
-            border: '1px solid #E2E5E8',
+            borderRadius: 'var(--border-radius)',
+            border: '1px solid var(--color-border)',
           }}
         >
-          <p className="text-muted mb-0">No locations saved yet. Click "Add Location" to start.</p>
+          <p className="text-secondary mb-0">No locations saved yet. Click "Add Location" to start.</p>
         </div>
       ) : (
         <div className="row g-3">
@@ -166,21 +166,22 @@ export const SavedLocations: React.FC = () => {
               <div
                 style={{
                   backgroundColor: '#FFFFFF',
-                  borderRadius: '8px',
-                  border: item.is_default ? '2px solid #285B50' : '1px solid #E2E5E8',
-                  padding: '20px',
+                  borderRadius: 'var(--border-radius)',
+                  border: item.is_default ? '2px solid var(--color-primary)' : '1px solid var(--color-border)',
+                  padding: '22px',
                   display: 'flex',
                   flexDirection: 'column',
                   justifyContent: 'space-between',
                   height: '100%',
+                  boxShadow: 'var(--shadow-sm)',
                 }}
               >
                 <div>
                   <div className="d-flex justify-content-between align-items-start mb-2">
                     <h5
                       style={{
-                        fontWeight: 700,
-                        color: '#202124',
+                        fontWeight: 800,
+                        color: 'var(--color-text-primary)',
                         marginBottom: '2px',
                         cursor: 'pointer',
                       }}
@@ -201,10 +202,11 @@ export const SavedLocations: React.FC = () => {
                     {item.is_default && (
                       <span
                         style={{
-                          fontSize: '0.7rem',
+                          fontSize: '0.75rem',
                           fontWeight: 700,
-                          backgroundColor: '#EDF4F2',
-                          color: '#285B50',
+                          backgroundColor: '#DCFCE7',
+                          color: '#15803D',
+                          border: '1px solid #BBF7D0',
                           padding: '2px 8px',
                           borderRadius: '12px',
                         }}
@@ -214,14 +216,14 @@ export const SavedLocations: React.FC = () => {
                     )}
                   </div>
 
-                  <p style={{ fontSize: '0.8rem', color: '#687078', marginBottom: '16px' }}>
+                  <p style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)', marginBottom: '16px' }}>
                     {[item.location.state, item.location.country].filter(Boolean).join(', ')}
                   </p>
                 </div>
 
                 <div
                   className="pt-3 d-flex justify-content-between align-items-center"
-                  style={{ borderTop: '1px solid #F0F2F4' }}
+                  style={{ borderTop: '1px solid var(--color-border)' }}
                 >
                   <button
                     onClick={() =>
@@ -234,8 +236,8 @@ export const SavedLocations: React.FC = () => {
                         country: item.location.country,
                       })
                     }
-                    className="btn btn-sm btn-link p-0 text-success"
-                    style={{ textDecoration: 'none', fontWeight: 600, fontSize: '0.85rem' }}
+                    className="btn btn-sm btn-link p-0"
+                    style={{ color: 'var(--color-primary)', textDecoration: 'none', fontWeight: 700, fontSize: '0.88rem' }}
                   >
                     View on Dashboard
                   </button>
@@ -244,10 +246,10 @@ export const SavedLocations: React.FC = () => {
                     {!item.is_default && (
                       <button
                         onClick={() => handleSetDefault(item.id)}
-                        className="btn btn-sm btn-link p-0 text-muted"
+                        className="btn btn-sm btn-link p-0 text-secondary"
                         title="Set as Default"
                       >
-                        <Star size={16} />
+                        <Star size={18} />
                       </button>
                     )}
                     <button
@@ -255,7 +257,7 @@ export const SavedLocations: React.FC = () => {
                       className="btn btn-sm btn-link p-0 text-danger"
                       title="Remove Location"
                     >
-                      <Trash2 size={16} />
+                      <Trash2 size={18} />
                     </button>
                   </div>
                 </div>
@@ -267,4 +269,3 @@ export const SavedLocations: React.FC = () => {
     </div>
   );
 };
-

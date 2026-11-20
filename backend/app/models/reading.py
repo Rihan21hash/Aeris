@@ -36,8 +36,9 @@ class AqiReading(Base):
 
     __table_args__ = (
         Index("ix_readings_location_measured", "location_id", "measured_at"),
+        Index("ix_readings_location_std_measured", "location_id", "aqi_standard", "measured_at"),
         UniqueConstraint(
-            "location_id", "source", "measured_at", name="uq_reading_source_time"
+            "location_id", "source", "measured_at", "aqi_standard", name="uq_reading_source_time_std"
         ),
     )
 

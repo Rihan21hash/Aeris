@@ -1,4 +1,4 @@
-"""AQI endpoints for current data, historical records, and extremes."""
+"""AQI endpoints for current data, historical records, and extremes (US EPA standard only)."""
 
 from __future__ import annotations
 
@@ -7,7 +7,6 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
-from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_or_create_location
@@ -22,7 +21,11 @@ from app.schemas.aqi import (
     PollutantData,
     PollutantsResponse,
 )
-from app.services.aqi_calculator import calculate_aqi, get_health_recommendation
+from app.services.aqi_calculator import (
+    calculate_aqi,
+    get_aqi_category,
+    get_health_recommendation,
+)
 from app.services.open_meteo import fetch_current_air_quality, fetch_historical_air_quality
 
 logger = logging.getLogger(__name__)
@@ -34,16 +37,11 @@ router = APIRouter(prefix="/api/aqi", tags=["AQI"])
 async def get_current_aqi(
     lat: float = Query(..., ge=-90.0, le=90.0, description="Latitude"),
     lon: float = Query(..., ge=-180.0, le=180.0, description="Longitude"),
-    standard: str = Query("us_epa", pattern="^(us_epa|cpcb_naqi)$"),
     db: AsyncSession = Depends(get_db),
 ):
-    """Retrieve current AQI for given coordinates from Open-Meteo and calculate index."""
+    """Retrieve current US EPA AQI for given coordinates from Open-Meteo."""
     # Find or create location
     location = await get_or_create_location(lat, lon, db)
-
-    # If country is India and standard wasn't explicitly changed, prefer CPCB NAQI
-    if location.country_code and location.country_code.upper() == "IN" and standard == "us_epa":
-        standard = "cpcb_naqi"
 
     # Fetch live data from Open-Meteo
     raw_data = await fetch_current_air_quality(lat, lon)
@@ -54,24 +52,6 @@ async def get_current_aqi(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Current air quality data is temporarily unavailable from the provider.",
         )
-
-    # Extract concentrations for calculation using standard-specific units
-    calc_units = (
-        raw_data.get("cpcb_units", {})
-        if standard == "cpcb_naqi"
-        else raw_data.get("epa_units", {})
-    )
-    pollutants_for_calc: dict[str, float] = {}
-    for pol in ("pm25", "pm10", "co", "no2", "so2", "o3"):
-        val = calc_units.get(pol)
-        if val is not None:
-            try:
-                pollutants_for_calc[pol] = float(val)
-            except (ValueError, TypeError):
-                pass
-
-    aqi_res = calculate_aqi(pollutants_for_calc, standard=standard)
-    health_rec = get_health_recommendation(aqi_res.value, standard=standard) if aqi_res.value is not None else None
 
     # Raw concentrations in µg/m³ for storage and display
     raw_units = raw_data.get("raw", {})
@@ -84,6 +64,27 @@ async def get_current_aqi(
             except (ValueError, TypeError):
                 pass
 
+    raw_us_aqi = raw_data.get("us_aqi_openmeteo")
+    epa_subs = raw_data.get("epa_sub_indexes", {})
+
+    # US EPA AQI: use Open-Meteo's raw current.us_aqi directly
+    aqi_value = float(raw_us_aqi) if raw_us_aqi is not None else None
+
+    # Determine primary pollutant from provider EPA sub-indices
+    primary_pollutant = None
+    if epa_subs:
+        valid_subs = {k: v for k, v in epa_subs.items() if v is not None}
+        if valid_subs:
+            matching = [k for k, v in valid_subs.items() if aqi_value is not None and v == aqi_value]
+            primary_pollutant = matching[0] if matching else max(valid_subs, key=valid_subs.get)
+
+    if not primary_pollutant and aqi_value is not None:
+        primary_pollutant = "pm25"
+
+    cat, color = get_aqi_category(aqi_value) if aqi_value is not None else ("Unavailable", "#6B7280")
+    health_rec = get_health_recommendation(aqi_value) if aqi_value is not None else None
+    active_sub_indexes = epa_subs
+
     # Parse measurement timestamp
     measured_at_str = current.get("measured_at")
     if measured_at_str:
@@ -94,32 +95,42 @@ async def get_current_aqi(
     else:
         measured_at = datetime.now(timezone.utc)
 
-    # Persist the reading to the database
-    reading = AqiReading(
-        location_id=location.id,
-        source="open_meteo",
-        measurement_type="model_estimate",
-        aqi_value=aqi_res.value,
-        aqi_standard=standard,
-        primary_pollutant=aqi_res.primary_pollutant,
-        pm25=pollutants_map.get("pm25"),
-        pm10=pollutants_map.get("pm10"),
-        co=pollutants_map.get("co"),
-        no2=pollutants_map.get("no2"),
-        so2=pollutants_map.get("so2"),
-        o3=pollutants_map.get("o3"),
-        measured_at=measured_at,
-    )
-
+    # Persist or update the reading in the database under US EPA standard
     try:
-        stmt_check = select(AqiReading.id).where(
-            AqiReading.location_id == reading.location_id,
-            AqiReading.source == reading.source,
-            AqiReading.measured_at == reading.measured_at,
+        stmt_check = select(AqiReading).where(
+            AqiReading.location_id == location.id,
+            AqiReading.source == "open_meteo",
+            AqiReading.measured_at == measured_at,
+            AqiReading.aqi_standard == "us_epa",
         )
-        if (await db.execute(stmt_check)).scalar_one_or_none() is None:
+        existing_reading = (await db.execute(stmt_check)).scalar_one_or_none()
+        if existing_reading is not None:
+            existing_reading.aqi_value = aqi_value
+            existing_reading.primary_pollutant = primary_pollutant
+            existing_reading.pm25 = pollutants_map.get("pm25")
+            existing_reading.pm10 = pollutants_map.get("pm10")
+            existing_reading.co = pollutants_map.get("co")
+            existing_reading.no2 = pollutants_map.get("no2")
+            existing_reading.so2 = pollutants_map.get("so2")
+            existing_reading.o3 = pollutants_map.get("o3")
+        else:
+            reading = AqiReading(
+                location_id=location.id,
+                source="open_meteo",
+                measurement_type="model_estimate",
+                aqi_value=aqi_value,
+                aqi_standard="us_epa",
+                primary_pollutant=primary_pollutant,
+                pm25=pollutants_map.get("pm25"),
+                pm10=pollutants_map.get("pm10"),
+                co=pollutants_map.get("co"),
+                no2=pollutants_map.get("no2"),
+                so2=pollutants_map.get("so2"),
+                o3=pollutants_map.get("o3"),
+                measured_at=measured_at,
+            )
             db.add(reading)
-            await db.commit()
+        await db.commit()
     except Exception:
         logger.exception("Failed to store AQI reading")
         await db.rollback()
@@ -151,7 +162,7 @@ async def get_current_aqi(
                 display_name=display_name,
                 concentration=conc,
                 unit=units.get(key, "µg/m³"),
-                aqi_contribution=aqi_res.sub_indexes.get(key),
+                aqi_contribution=active_sub_indexes.get(key),
                 available=conc is not None,
             )
         )
@@ -164,6 +175,10 @@ async def get_current_aqi(
     )
 
     diagnostics = {
+        "raw_us_aqi": raw_us_aqi,
+        "backend_aqi": aqi_value,
+        "selected_standard": "us_epa",
+        "source_timestamp": str(raw_data.get("raw_provider_current", {}).get("time") or current.get("measured_at")),
         "requested_coordinates": {
             "latitude": lat,
             "longitude": lon,
@@ -190,20 +205,15 @@ async def get_current_aqi(
         },
         "raw_api_response": raw_data.get("raw_provider_current", {}),
         "raw_api_units": raw_data.get("raw_provider_units", {}),
-        "discrepancy_explanation": (
-            "AERIS displays authentic, unmanipulated numerical model data returned directly by Open-Meteo for these coordinates. "
-            "Other platforms reporting higher numbers (e.g. Kolhapur AQI 211, PM2.5 131) measure from physical ground monitoring stations "
-            "(such as CPCB/MPCB CAAQMS at Shivaji University, Kolhapur). Point-source ground stations capture local, street-level emission plumes "
-            "(traffic, road dust, biomass burning) that are smoothed out across regional 11-40km grid cells in global atmospheric dispersion models."
-        ),
     }
 
     return AqiCurrentResponse(
-        aqi_value=aqi_res.value,
-        aqi_standard=standard,
-        category=aqi_res.category,
-        color=aqi_res.color,
-        primary_pollutant=aqi_res.primary_pollutant,
+        aqi_value=aqi_value,
+        raw_us_aqi=raw_us_aqi,
+        aqi_standard="us_epa",
+        category=cat,
+        color=color,
+        primary_pollutant=primary_pollutant,
         measurement_type="model_estimate",
         source="open_meteo",
         measured_at=measured_at,
@@ -223,7 +233,7 @@ async def get_aqi_history(
     range: str = Query("24h", pattern="^(24h|7d)$", description="History window"),
     db: AsyncSession = Depends(get_db),
 ):
-    """Retrieve historical AQI records (24h hourly or 7d daily aggregated)."""
+    """Retrieve historical US EPA AQI records (excluding legacy records)."""
     location = await db.get(Location, location_id)
     if not location:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Location not found")
@@ -232,11 +242,12 @@ async def get_aqi_history(
     delta = timedelta(hours=24) if range == "24h" else timedelta(days=7)
     start_time = now - delta
 
-    # Query existing database readings
+    # Query existing database readings matching US EPA standard only
     stmt = (
         select(AqiReading)
         .where(
             AqiReading.location_id == location_id,
+            AqiReading.aqi_standard == "us_epa",
             AqiReading.measured_at >= start_time,
         )
         .order_by(AqiReading.measured_at.asc())
@@ -254,45 +265,43 @@ async def get_aqi_history(
             location.latitude, location.longitude, start_date_str, end_date_str
         )
 
-        std = "cpcb_naqi" if location.country_code == "IN" else "us_epa"
         for item in historical_raw:
             m_time = item.get("measured_at")
             if not m_time or m_time < start_time:
                 continue
 
-            # Skip if already exists
-            chk = select(AqiReading.id).where(
+            raw_dict = item.get("raw", {})
+            h_val = float(item["us_aqi_openmeteo"]) if item.get("us_aqi_openmeteo") is not None else None
+            h_primary = "pm25"
+
+            chk = select(AqiReading).where(
                 AqiReading.location_id == location.id,
                 AqiReading.source == "open_meteo",
                 AqiReading.measured_at == m_time,
+                AqiReading.aqi_standard == "us_epa",
             )
-            if (await db.execute(chk)).scalar_one_or_none() is not None:
-                continue
-
-            p_map = {
-                k: float(item[k])
-                for k in ("pm25", "pm10", "co", "no2", "so2", "o3")
-                if item.get(k) is not None
-            }
-            res = calculate_aqi(p_map, standard=std)
-
-            r_entry = AqiReading(
-                location_id=location.id,
-                station_id=None,
-                source="open_meteo",
-                measurement_type="model_estimate",
-                aqi_value=res.value,
-                aqi_standard=std,
-                primary_pollutant=res.primary_pollutant,
-                pm25=p_map.get("pm25"),
-                pm10=p_map.get("pm10"),
-                co=p_map.get("co"),
-                no2=p_map.get("no2"),
-                so2=p_map.get("so2"),
-                o3=p_map.get("o3"),
-                measured_at=m_time,
-            )
-            db.add(r_entry)
+            existing_h = (await db.execute(chk)).scalar_one_or_none()
+            if existing_h is not None:
+                existing_h.aqi_value = h_val
+                existing_h.primary_pollutant = h_primary
+            else:
+                r_entry = AqiReading(
+                    location_id=location.id,
+                    station_id=None,
+                    source="open_meteo",
+                    measurement_type="model_estimate",
+                    aqi_value=h_val,
+                    aqi_standard="us_epa",
+                    primary_pollutant=h_primary,
+                    pm25=raw_dict.get("pm25"),
+                    pm10=raw_dict.get("pm10"),
+                    co=raw_dict.get("co"),
+                    no2=raw_dict.get("no2"),
+                    so2=raw_dict.get("so2"),
+                    o3=raw_dict.get("o3"),
+                    measured_at=m_time,
+                )
+                db.add(r_entry)
 
         await db.commit()
 
@@ -301,6 +310,7 @@ async def get_aqi_history(
             select(AqiReading)
             .where(
                 AqiReading.location_id == location_id,
+                AqiReading.aqi_standard == "us_epa",
                 AqiReading.measured_at >= start_time,
             )
             .order_by(AqiReading.measured_at.asc())
@@ -342,7 +352,7 @@ async def get_aqi_extremes(
     range: str = Query("24h", pattern="^(24h|7d)$", description="History window"),
     db: AsyncSession = Depends(get_db),
 ):
-    """Retrieve maximum, minimum, and average AQI over the given time range."""
+    """Retrieve maximum, minimum, and average US EPA AQI over the given time range."""
     location = await db.get(Location, location_id)
     if not location:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Location not found")
@@ -353,6 +363,7 @@ async def get_aqi_extremes(
 
     stmt = select(AqiReading).where(
         AqiReading.location_id == location_id,
+        AqiReading.aqi_standard == "us_epa",
         AqiReading.measured_at >= start_time,
         AqiReading.aqi_value.is_not(None),
     )

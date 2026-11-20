@@ -13,7 +13,6 @@ from app.core.config import settings
 from app.core.database import async_session_factory
 from app.models.location import Location
 from app.models.reading import AqiReading
-from app.services.aqi_calculator import calculate_aqi
 from app.services.open_meteo import fetch_current_air_quality
 
 if TYPE_CHECKING:
@@ -37,38 +36,18 @@ async def collect_for_location(
             logger.warning("No current reading returned for location %s", location.id)
             return None
 
-        # Determine standard based on country if not explicitly given
-        loc_standard = standard
-        if location.country_code and location.country_code.upper() == "IN":
-            loc_standard = "cpcb_naqi"
+        raw_us_aqi = raw_data.get("us_aqi_openmeteo")
+        epa_subs = raw_data.get("epa_sub_indexes", {})
 
-        # Build pollutant concentration dict using standard-specific units
-        calc_units = (
-            raw_data.get("cpcb_units", {})
-            if loc_standard == "cpcb_naqi"
-            else raw_data.get("epa_units", {})
-        )
-        pollutants_for_calc: dict[str, float] = {}
-        for pol in ("pm25", "pm10", "co", "no2", "so2", "o3"):
-            val = calc_units.get(pol)
-            if val is not None:
-                try:
-                    pollutants_for_calc[pol] = float(val)
-                except (ValueError, TypeError):
-                    pass
-
-        aqi_result = calculate_aqi(pollutants_for_calc, standard=loc_standard)
-
-        # Raw concentrations in µg/m³
-        raw_units = raw_data.get("raw", {})
-        pollutants: dict[str, float] = {}
-        for pol in ("pm25", "pm10", "co", "no2", "so2", "o3"):
-            val = raw_units.get(pol)
-            if val is not None:
-                try:
-                    pollutants[pol] = float(val)
-                except (ValueError, TypeError):
-                    pass
+        aqi_val = float(raw_us_aqi) if raw_us_aqi is not None else None
+        primary_pol = None
+        if epa_subs:
+            valid_subs = {k: v for k, v in epa_subs.items() if v is not None}
+            if valid_subs:
+                matching = [k for k, v in valid_subs.items() if aqi_val is not None and v == aqi_val]
+                primary_pol = matching[0] if matching else max(valid_subs, key=valid_subs.get)
+        if not primary_pol and aqi_val is not None:
+            primary_pol = "pm25"
 
         measured_at_str = current.get("measured_at")
         if measured_at_str:
@@ -84,9 +63,9 @@ async def collect_for_location(
             station_id=None,
             source="open_meteo",
             measurement_type="model_estimate",
-            aqi_value=aqi_result.value,
-            aqi_standard=loc_standard,
-            primary_pollutant=aqi_result.primary_pollutant,
+            aqi_value=aqi_val,
+            aqi_standard="us_epa",
+            primary_pollutant=primary_pol,
             pm25=pollutants.get("pm25"),
             pm10=pollutants.get("pm10"),
             co=pollutants.get("co"),
@@ -96,15 +75,20 @@ async def collect_for_location(
             measured_at=measured_at,
         )
 
-        # Check if already exists
-        chk = select(AqiReading.id).where(
+        # Check if already exists for this standard
+        chk = select(AqiReading).where(
             AqiReading.location_id == reading.location_id,
             AqiReading.source == reading.source,
             AqiReading.measured_at == reading.measured_at,
+            AqiReading.aqi_standard == reading.aqi_standard,
         )
-        if (await session.execute(chk)).scalar_one_or_none() is None:
+        existing = (await session.execute(chk)).scalar_one_or_none()
+        if existing is not None:
+            existing.aqi_value = reading.aqi_value
+            existing.primary_pollutant = reading.primary_pollutant
+        else:
             session.add(reading)
-            await session.commit()
+        await session.commit()
         return reading
 
     except Exception:

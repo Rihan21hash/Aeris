@@ -20,7 +20,8 @@ export interface PollutantsData {
 
 export interface AqiCurrentData {
   aqi_value: number | null;
-  aqi_standard: 'us_epa' | 'cpcb_naqi';
+  raw_us_aqi?: number | null;
+  aqi_standard: 'us_epa';
   category: string;
   color: string;
   primary_pollutant: string | null;
@@ -34,6 +35,10 @@ export interface AqiCurrentData {
   pollutants: PollutantsData | null;
   health_recommendation: string | null;
   diagnostics?: {
+    raw_us_aqi?: number | null;
+    backend_aqi?: number | null;
+    selected_standard?: string;
+    source_timestamp?: string;
     requested_coordinates?: { latitude: number; longitude: number };
     resolved_location?: { id: number; name: string; country_code: string; latitude: number; longitude: number };
     data_source?: string;
@@ -176,8 +181,8 @@ async function request<T>(path: string, options: RequestInit = {}, token?: strin
 
 export const api = {
   // Current AQI
-  getCurrentAqi(lat: number, lon: number, standard: 'us_epa' | 'cpcb_naqi' = 'us_epa'): Promise<AqiCurrentData> {
-    return request<AqiCurrentData>(`/api/aqi/current?lat=${lat}&lon=${lon}&standard=${standard}`);
+  getCurrentAqi(lat: number, lon: number): Promise<AqiCurrentData> {
+    return request<AqiCurrentData>(`/api/aqi/current?lat=${lat}&lon=${lon}`);
   },
 
   // Historical Trends
@@ -191,8 +196,8 @@ export const api = {
   },
 
   // Pollutants
-  getCurrentPollutants(lat: number, lon: number, standard: 'us_epa' | 'cpcb_naqi' = 'us_epa'): Promise<PollutantsData> {
-    return request<PollutantsData>(`/api/pollutants/current?lat=${lat}&lon=${lon}&standard=${standard}`);
+  getCurrentPollutants(lat: number, lon: number): Promise<PollutantsData> {
+    return request<PollutantsData>(`/api/pollutants/current?lat=${lat}&lon=${lon}`);
   },
 
   // Location search
@@ -251,6 +256,25 @@ export const api = {
     );
   },
 
+  verifySubscription(
+    endpoint: string,
+    token?: string
+  ): Promise<{
+    registered: boolean;
+    enabled: boolean;
+    subscription_id: number | null;
+    last_delivery_status: string | null;
+  }> {
+    return request(
+      '/api/notifications/verify-subscription',
+      {
+        method: 'POST',
+        body: JSON.stringify({ endpoint }),
+      },
+      token
+    );
+  },
+
   unsubscribePush(endpoint: string): Promise<{ status: string }> {
     return request<{ status: string }>('/api/notifications/subscribe', {
       method: 'DELETE',
@@ -259,7 +283,7 @@ export const api = {
   },
 
   sendTestNotification(
-    data: { endpoint?: string; latitude?: number; longitude?: number; location_name?: string },
+    data: { endpoint?: string; latitude?: number; longitude?: number; location_name?: string; standard?: string },
     token?: string
   ): Promise<{ status: string; detail: string }> {
     return request<{ status: string; detail: string }>(

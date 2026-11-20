@@ -105,7 +105,7 @@ export const LocationProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             city: null,
             state: null,
             country: null,
-            countryCode: aqiData.aqi_standard === 'cpcb_naqi' ? 'IN' : null,
+            countryCode: aqiData.diagnostics?.resolved_location?.country_code || null,
             locationId: aqiData.location_id,
           };
           setLocationState(detectedLoc);

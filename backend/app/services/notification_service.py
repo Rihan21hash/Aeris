@@ -1,22 +1,26 @@
 """Web Push notification service for AERIS.
 
-Delivers two types of notifications:
+Delivers notifications:
 - **Daily briefings**: Sent once per day at the user's preferred local time.
 - **High-pollution alerts**: Sent when the AQI category at a user's default
   location worsens compared to the last recorded category.
+- **AQI improvement notifications**: Sent when the AQI category improves significantly.
+- **Test notifications**: Sent on demand to verify browser push delivery.
 
 All notifications use real AQI data fetched live from the configured data
-provider.  No hardcoded or fabricated AQI values are used in production.
+provider. No hardcoded or fabricated AQI values are used in production.
 """
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any
 from zoneinfo import ZoneInfo
 
+import requests
 from pywebpush import WebPushException, webpush
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -30,8 +34,13 @@ from app.models.notification import (
     NotificationSubscription,
 )
 from app.models.user import User
-from app.services.aqi_calculator import calculate_aqi, get_aqi_category, get_health_recommendation
+from app.services.aqi_calculator import (
+    calculate_aqi,
+    get_aqi_category,
+    get_health_recommendation,
+)
 from app.services.notification_templates import (
+    category_improved,
     category_worsened,
     render_template,
     select_template,
@@ -61,27 +70,71 @@ MAX_DATA_AGE_HOURS = 2
 # Low-level push delivery
 # ──────────────────────────────────────────────────────────────────────
 
-def send_push_notification(subscription_info: dict, payload: dict) -> bool:
-    """Send a Web Push notification to a single browser subscription."""
+def _sync_webpush(subscription_info: dict, payload: dict) -> dict[str, Any]:
+    """Execute synchronous webpush call with detailed status reporting."""
     if not settings.VAPID_PRIVATE_KEY or not settings.VAPID_PUBLIC_KEY:
         logger.warning("VAPID keys not configured; cannot send push notification")
-        return False
+        return {
+            "success": False,
+            "status_code": None,
+            "error_type": "unconfigured",
+            "error_message": "VAPID keys are not configured on the server",
+        }
 
     try:
-        webpush(
+        resp = webpush(
             subscription_info=subscription_info,
             data=json.dumps(payload),
             vapid_private_key=settings.VAPID_PRIVATE_KEY,
             vapid_claims={"sub": settings.VAPID_CLAIM_EMAIL or "mailto:admin@aeris.app"},
+            timeout=10.0,
         )
-        logger.info("WebPush dispatched to endpoint: %s...", subscription_info.get("endpoint", "")[:40])
-        return True
+        status_code = getattr(resp, "status_code", 200)
+        logger.info("WebPush dispatched successfully (HTTP %s) to %s...", status_code, subscription_info.get("endpoint", "")[:45])
+        return {
+            "success": True,
+            "status_code": status_code,
+            "error_type": None,
+            "error_message": None,
+        }
     except WebPushException as exc:
-        logger.warning("WebPush failed: %s", exc)
-        return False
-    except Exception:
-        logger.exception("Unexpected error sending push notification")
-        return False
+        status_code = getattr(exc.response, "status_code", None) if hasattr(exc, "response") and exc.response is not None else None
+        resp_text = getattr(exc.response, "text", str(exc)) if hasattr(exc, "response") and exc.response is not None else str(exc)
+        is_expired = status_code in (404, 410)
+        logger.warning("WebPush failed (HTTP %s): %s", status_code, resp_text)
+        return {
+            "success": False,
+            "status_code": status_code,
+            "error_type": "expired" if is_expired else "rejected",
+            "error_message": f"Push service rejected delivery (HTTP {status_code}): {resp_text}",
+        }
+    except requests.exceptions.RequestException as req_err:
+        logger.warning("WebPush network/connection error: %s", req_err)
+        return {
+            "success": False,
+            "status_code": None,
+            "error_type": "network_error",
+            "error_message": f"Network error contacting browser push service: {req_err}",
+        }
+    except Exception as exc:
+        logger.exception("Unexpected error sending push notification: %s", exc)
+        return {
+            "success": False,
+            "status_code": None,
+            "error_type": "unexpected",
+            "error_message": f"Unexpected push error: {exc}",
+        }
+
+
+async def send_push_notification_async(subscription_info: dict, payload: dict) -> dict[str, Any]:
+    """Asynchronously send push notification without blocking event loop."""
+    return await asyncio.to_thread(_sync_webpush, subscription_info, payload)
+
+
+def send_push_notification(subscription_info: dict, payload: dict) -> bool:
+    """Synchronous backwards-compatible wrapper returning bool."""
+    res = _sync_webpush(subscription_info, payload)
+    return res["success"]
 
 
 def _build_sub_info(sub: NotificationSubscription) -> dict:
@@ -101,9 +154,9 @@ def _build_sub_info(sub: NotificationSubscription) -> dict:
 async def _fetch_live_aqi(
     lat: float,
     lon: float,
-    standard: str,
+    standard: str = "us_epa",
 ) -> dict[str, Any] | None:
-    """Fetch live AQI data and return a dict with all needed fields.
+    """Fetch live AQI data under US EPA AQI standard.
 
     Returns ``None`` if data is unavailable, stale, or insufficient.
     """
@@ -131,39 +184,42 @@ async def _fetch_live_aqi(
         except (ValueError, TypeError):
             pass
 
-    # Use the correct unit set for the standard
-    if standard == "cpcb_naqi":
-        calc_units = raw.get("cpcb_units", {})
+    raw_us_aqi = raw.get("us_aqi_openmeteo")
+    if raw_us_aqi is not None:
+        aqi_val = int(round(float(raw_us_aqi)))
     else:
-        calc_units = raw.get("epa_units", {})
+        # Fall back to US EPA calculation from pollutant concentrations if raw_us_aqi not present
+        raw_pol = raw.get("raw", {})
+        pollutants: dict[str, float] = {}
+        for p in ("pm25", "pm10", "o3", "co", "so2", "no2"):
+            if p in raw_pol and raw_pol[p] is not None:
+                try:
+                    pollutants[p] = float(raw_pol[p])
+                except (ValueError, TypeError):
+                    pass
+        calc_res = calculate_aqi(pollutants)
+        if calc_res.value is None:
+            return None
+        aqi_val = int(round(calc_res.value))
 
-    pollutants: dict[str, float] = {}
-    for pol in ("pm25", "pm10", "co", "no2", "so2", "o3"):
-        val = calc_units.get(pol)
-        if val is not None:
-            try:
-                pollutants[pol] = float(val)
-            except (ValueError, TypeError):
-                pass
-
-    aqi_result = calculate_aqi(pollutants, standard=standard)
-    if aqi_result.value is None:
-        return None
-
-    aqi_val = int(aqi_result.value)
-    category = aqi_result.category
-    health_advice = get_health_recommendation(aqi_val, standard=standard)
-    timestamp_str = measured_at_str or datetime.now(timezone.utc).isoformat()
+    cat, col = get_aqi_category(aqi_val)
+    epa_subs = raw.get("epa_sub_indexes", {})
+    primary = "pm25"
+    if epa_subs:
+        v_subs = {k: v for k, v in epa_subs.items() if v is not None}
+        if v_subs:
+            primary = max(v_subs, key=v_subs.get)
+    health_advice = get_health_recommendation(aqi_val)
 
     return {
         "aqi": aqi_val,
-        "category": category,
-        "primary_pollutant": aqi_result.primary_pollutant or "PM2.5",
+        "category": cat,
+        "primary_pollutant": primary,
         "health_advice": health_advice,
-        "standard": standard,
-        "timestamp": timestamp_str,
-        "pollutants": pollutants,
-        "sub_indexes": aqi_result.sub_indexes,
+        "standard": "us_epa",
+        "timestamp": measured_at_str or datetime.now(timezone.utc).isoformat(),
+        "pollutants": raw.get("raw", {}),
+        "sub_indexes": epa_subs,
     }
 
 
@@ -217,15 +273,11 @@ async def _record_history(
 async def send_daily_notifications() -> None:
     """Periodic job: check each active notification preference and deliver
     a daily briefing at the user's preferred local time.
-
-    For each user, looks up their saved default location, fetches live AQI,
-    selects a template from the library, and sends via Web Push.
     """
     logger.debug("Running daily push notification delivery check")
 
     async with async_session_factory() as session:
         try:
-            # Load all active preferences with their subscriptions
             stmt = (
                 select(NotificationPreference, NotificationSubscription)
                 .join(
@@ -265,11 +317,22 @@ async def _process_daily_briefing(
     now_local = datetime.now(user_tz)
     today_str = now_local.strftime("%Y-%m-%d")
 
-    # 2. Check if already dispatched today
+    # 2. Check in-memory tracker
     if _daily_sent_tracker.get(pref.id) == today_str:
         return
 
-    # 3. Check if local time matches preferred time (HH:MM within 3-minute window)
+    # Check database deduplication key to survive server restarts
+    dedup_key = f"daily:{pref.id}:{today_str}"
+    hist_check = select(NotificationHistory.id).where(
+        NotificationHistory.deduplication_key == dedup_key,
+        NotificationHistory.delivery_status == "delivered",
+    )
+    existing_sent = (await session.execute(hist_check)).scalar_one_or_none()
+    if existing_sent is not None:
+        _daily_sent_tracker[pref.id] = today_str
+        return
+
+    # 3. Check if local time matches preferred time (HH:MM within 4-minute window)
     try:
         parts = pref.preferred_time.split(":")
         pref_h, pref_m = int(parts[0]), int(parts[1]) if len(parts) > 1 else 0
@@ -278,7 +341,7 @@ async def _process_daily_briefing(
 
     current_mins = now_local.hour * 60 + now_local.minute
     pref_mins = pref_h * 60 + pref_m
-    if abs(current_mins - pref_mins) > 3:
+    if abs(current_mins - pref_mins) > 4:
         return
 
     # 4. Resolve the user's saved default location
@@ -287,7 +350,6 @@ async def _process_daily_briefing(
     loc_id = None
 
     if user_id:
-        # First try: user's default saved location
         default_stmt = (
             select(SavedLocation)
             .where(
@@ -300,34 +362,32 @@ async def _process_daily_briefing(
             loc = await session.get(Location, saved.location_id)
             loc_id = saved.location_id
 
-    # Fallback: location linked to the preference
+    # Fallback 1: location linked to preference
     if not loc and pref.location_id:
         loc = await session.get(Location, pref.location_id)
         loc_id = pref.location_id
 
+    # Fallback 2: first location in database
     if not loc:
-        logger.debug("No location found for pref %d, skipping daily briefing", pref.id)
+        loc_stmt = select(Location).order_by(Location.id.asc()).limit(1)
+        loc = (await session.execute(loc_stmt)).scalars().first()
+        if loc:
+            loc_id = loc.id
+
+    if not loc:
+        logger.debug("No location found in database for pref %d, skipping daily briefing", pref.id)
         return
 
-    # 5. Determine AQI standard from user preference or country
-    standard = "us_epa"
-    if user_id:
-        user = await session.get(User, user_id)
-        if user and user.preferred_aqi_standard:
-            standard = user.preferred_aqi_standard
-    if standard == "us_epa" and loc.country_code and loc.country_code.upper() == "IN":
-        standard = "cpcb_naqi"
-
-    # 6. Fetch live AQI
-    aqi_data = await _fetch_live_aqi(loc.latitude, loc.longitude, standard)
+    # 5. Live AQI using US EPA standard
+    aqi_data = await _fetch_live_aqi(loc.latitude, loc.longitude, "us_epa")
     if not aqi_data:
         logger.info("No valid AQI data for %s, skipping daily briefing", loc.name)
         return
 
-    # 7. Select and render template
+    # 6. Select and render template
     template, tpl_idx = select_template(
         category=aqi_data["category"],
-        standard=standard,
+        standard="us_epa",
         notification_type="daily_briefing",
         user_id=user_id or 0,
     )
@@ -357,21 +417,23 @@ async def _process_daily_briefing(
     }
 
     sub_info = _build_sub_info(sub)
-    success = send_push_notification(sub_info, payload)
-
-    dedup_key = f"daily:{pref.id}:{today_str}"
+    push_res = await send_push_notification_async(sub_info, payload)
+    success = push_res["success"]
 
     if success:
         _daily_sent_tracker[pref.id] = today_str
+        delivery_status = "delivered"
         logger.info("Sent daily briefing to sub %d (%s, AQI %d)", sub.id, loc.name, aqi_data["aqi"])
-    else:
-        # Deactivate expired/invalid endpoint
+    elif push_res.get("error_type") == "expired":
+        delivery_status = "expired"
         await session.execute(
             update(NotificationSubscription)
             .where(NotificationSubscription.id == sub.id)
             .values(enabled=False)
         )
         await session.commit()
+    else:
+        delivery_status = "failed"
 
     # 9. Record in history
     await _record_history(
@@ -382,28 +444,24 @@ async def _process_daily_briefing(
         aqi_data=aqi_data,
         title=rendered["title"],
         body=rendered["body"],
-        delivery_status="delivered" if success else "failed",
+        delivery_status=delivery_status,
         dedup_key=dedup_key,
         template_index=tpl_idx,
     )
 
 
 # ──────────────────────────────────────────────────────────────────────
-# High-pollution alerts
+# High-pollution & Improvement alerts
 # ──────────────────────────────────────────────────────────────────────
 
 async def send_high_pollution_alerts() -> None:
     """Periodic job: check each user's default location and send an alert
-    when the AQI category has worsened since the last check.
-
-    Implements a cooldown of ``ALERT_COOLDOWN_HOURS`` between alerts
-    per user to avoid notification spam.
+    when the AQI category has worsened or significantly improved.
     """
     logger.debug("Running high-pollution alert check")
 
     async with async_session_factory() as session:
         try:
-            # Get all users who have notification subscriptions
             stmt = (
                 select(User, NotificationSubscription)
                 .join(
@@ -414,7 +472,6 @@ async def send_high_pollution_alerts() -> None:
             )
             results = (await session.execute(stmt)).all()
 
-            # Deduplicate by user (a user may have multiple subscriptions)
             seen_users: set[int] = set()
             for user, sub in results:
                 if user.id in seen_users:
@@ -434,7 +491,7 @@ async def _process_pollution_alert(
     user: User,
     sub: NotificationSubscription,
 ) -> None:
-    """Handle a single user for high-pollution alerts."""
+    """Handle a single user for high-pollution and air improvement alerts."""
     # 1. Find user's default saved location
     default_stmt = (
         select(SavedLocation)
@@ -444,44 +501,61 @@ async def _process_pollution_alert(
         )
     )
     saved = (await session.execute(default_stmt)).scalars().first()
-    if not saved:
-        return
+    loc = None
+    if saved:
+        loc = await session.get(Location, saved.location_id)
 
-    loc = await session.get(Location, saved.location_id)
+    # Fallback to any location linked in preferences
+    if not loc:
+        pref_stmt = select(NotificationPreference.location_id).where(
+            NotificationPreference.user_id == user.id,
+            NotificationPreference.location_id.is_not(None),
+        )
+        pref_loc_id = (await session.execute(pref_stmt)).scalars().first()
+        if pref_loc_id:
+            loc = await session.get(Location, pref_loc_id)
+
     if not loc:
         return
 
-    # 2. Determine standard
-    standard = user.preferred_aqi_standard or "us_epa"
-    if standard == "us_epa" and loc.country_code and loc.country_code.upper() == "IN":
-        standard = "cpcb_naqi"
-
-    # 3. Fetch live AQI
-    aqi_data = await _fetch_live_aqi(loc.latitude, loc.longitude, standard)
+    # 2. Fetch live AQI (US EPA)
+    aqi_data = await _fetch_live_aqi(loc.latitude, loc.longitude, "us_epa")
     if not aqi_data:
         return
 
     new_category = aqi_data["category"]
 
-    # 4. Compare with last known category
+    # 3. Compare with last known category
     last = _alert_tracker.get(user.id)
     if last:
         old_category = last["category"]
+
         # Check cooldown
         last_alert_time = last.get("last_alert_at")
         if last_alert_time:
             elapsed = datetime.now(timezone.utc) - last_alert_time
             if elapsed < timedelta(hours=ALERT_COOLDOWN_HOURS):
-                # Update the tracked category but don't send another alert yet
                 _alert_tracker[user.id]["category"] = new_category
                 return
 
-        if category_worsened(old_category, new_category, standard):
-            # Category worsened — send alert
+        should_send = False
+        alert_type = "high_pollution_alert"
+        tag = "aeris-high-pollution"
+
+        if category_worsened(old_category, new_category, "us_epa"):
+            should_send = True
+            alert_type = "high_pollution_alert"
+            tag = "aeris-high-pollution"
+        elif category_improved(old_category, new_category, "us_epa"):
+            should_send = True
+            alert_type = "aqi_improvement"
+            tag = "aeris-aqi-improvement"
+
+        if should_send:
             template, tpl_idx = select_template(
                 category=new_category,
-                standard=standard,
-                notification_type="high_pollution_alert",
+                standard="us_epa",
+                notification_type=alert_type,
                 user_id=user.id,
             )
             rendered = render_template(
@@ -499,7 +573,7 @@ async def _process_pollution_alert(
                 "body": rendered["body"],
                 "icon": "/favicon.svg",
                 "badge": "/favicon.svg",
-                "tag": "aeris-high-pollution",
+                "tag": tag,
                 "data": {
                     "url": f"/?lat={loc.latitude}&lon={loc.longitude}",
                     "aqi": aqi_data["aqi"],
@@ -509,38 +583,51 @@ async def _process_pollution_alert(
             }
 
             sub_info = _build_sub_info(sub)
-            success = send_push_notification(sub_info, payload)
+            push_res = await send_push_notification_async(sub_info, payload)
+            success = push_res["success"]
 
             _alert_tracker[user.id] = {
                 "category": new_category,
                 "last_alert_at": datetime.now(timezone.utc),
             }
 
-            dedup_key = f"alert:{user.id}:{datetime.now(timezone.utc).strftime('%Y-%m-%dT%H')}"
+            dedup_key = f"{alert_type}:{user.id}:{datetime.now(timezone.utc).strftime('%Y-%m-%dT%H')}"
+
+            if push_res.get("error_type") == "expired":
+                delivery_status = "expired"
+                await session.execute(
+                    update(NotificationSubscription)
+                    .where(NotificationSubscription.id == sub.id)
+                    .values(enabled=False)
+                )
+                await session.commit()
+            elif success:
+                delivery_status = "delivered"
+            else:
+                delivery_status = "failed"
 
             await _record_history(
                 session,
                 user_id=user.id,
                 location_id=loc.id,
-                notification_type="high_pollution_alert",
+                notification_type=alert_type,
                 aqi_data=aqi_data,
                 title=rendered["title"],
                 body=rendered["body"],
-                delivery_status="delivered" if success else "failed",
+                delivery_status=delivery_status,
                 dedup_key=dedup_key,
                 template_index=tpl_idx,
             )
 
             if success:
                 logger.info(
-                    "Sent high-pollution alert to user %d (%s: %s -> %s, AQI %d)",
-                    user.id, loc.name, old_category, new_category, aqi_data["aqi"],
+                    "Sent %s to user %d (%s: %s -> %s, AQI %d)",
+                    alert_type, user.id, loc.name, old_category, new_category, aqi_data["aqi"],
                 )
         else:
-            # Category did not worsen — just update tracker
             _alert_tracker[user.id]["category"] = new_category
     else:
-        # First observation — store baseline, no alert
+        # First observation — store baseline
         _alert_tracker[user.id] = {
             "category": new_category,
             "last_alert_at": None,
@@ -557,16 +644,26 @@ async def send_test_push(
     lon: float | None = None,
     location_name: str | None = None,
     user_id: int | None = None,
+    standard: str | None = None,
 ) -> dict[str, Any]:
     """Send an immediate [TEST] push notification to verify delivery."""
     async with async_session_factory() as session:
         sub = None
         if endpoint:
             stmt = select(NotificationSubscription).where(
-                NotificationSubscription.endpoint == endpoint,
-                NotificationSubscription.enabled.is_(True),
+                NotificationSubscription.endpoint == endpoint
             )
-            sub = (await session.execute(stmt)).scalars().first()
+            candidate = (await session.execute(stmt)).scalars().first()
+            if candidate:
+                if not candidate.enabled:
+                    raise ValueError(
+                        "This push subscription has expired or was disabled. Please click 'Re-enable Notifications' to register a fresh subscription."
+                    )
+                sub = candidate
+            else:
+                raise ValueError(
+                    "This browser subscription is not registered on the server. Please click 'Enable Daily Notifications' to register it."
+                )
 
         if not sub and user_id:
             stmt = (
@@ -592,27 +689,26 @@ async def send_test_push(
                 "No active notification subscription found. Please click 'Enable Daily Notifications' first."
             )
 
-        # Fetch real AQI data
+        # Fetch real AQI data (US EPA standard)
         latitude = lat if lat is not None else 28.6139
         longitude = lon if lon is not None else 77.2090
         city = location_name or "Your Monitored City"
 
-        aqi_data = await _fetch_live_aqi(latitude, longitude, "cpcb_naqi")
+        aqi_data = await _fetch_live_aqi(latitude, longitude, "us_epa")
 
-        if aqi_data:
-            aqi_val = aqi_data["aqi"]
-            category = aqi_data["category"]
-            recommendation = aqi_data["health_advice"]
-        else:
-            # If live data is unavailable, indicate this in the test
+        if not aqi_data:
             raise RuntimeError(
                 "Could not fetch live AQI data for the test notification. "
                 "Please check your network connection and try again."
             )
 
+        aqi_val = aqi_data["aqi"]
+        category = aqi_data["category"]
+        recommendation = aqi_data["health_advice"]
+
         payload = {
             "title": f"[TEST] AERIS — {city}",
-            "body": f"Current AQI: {aqi_val} ({category}). {recommendation}",
+            "body": f"Current AQI: {aqi_val} ({category}) [US EPA AQI]. {recommendation}",
             "icon": "/favicon.svg",
             "badge": "/favicon.svg",
             "tag": "aeris-test-notification",
@@ -625,7 +721,17 @@ async def send_test_push(
         }
 
         sub_info = _build_sub_info(sub)
-        success = send_push_notification(sub_info, payload)
+        push_res = await send_push_notification_async(sub_info, payload)
+        success = push_res["success"]
+
+        if push_res.get("error_type") == "expired":
+            sub.enabled = False
+            await session.commit()
+            delivery_status = "expired"
+        elif success:
+            delivery_status = "delivered"
+        else:
+            delivery_status = "failed"
 
         # Record test in history
         await _record_history(
@@ -636,17 +742,15 @@ async def send_test_push(
             aqi_data=aqi_data,
             title=payload["title"],
             body=payload["body"],
-            delivery_status="delivered" if success else "failed",
+            delivery_status=delivery_status,
         )
 
         if not success:
-            raise RuntimeError(
-                "Push dispatch was rejected by the browser push service. "
-                "Please ensure notification permissions are allowed."
-            )
+            err_msg = push_res.get("error_message") or "Push delivery was rejected."
+            raise RuntimeError(err_msg)
 
         return {
             "status": "delivered",
-            "detail": f"[TEST] Push notification delivered: AQI {aqi_val} ({category}) for {city}",
+            "detail": f"[TEST] Push notification delivered: AQI {aqi_val} ({category}) [US EPA AQI] for {city}",
             "payload": payload,
         }

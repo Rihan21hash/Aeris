@@ -8,8 +8,7 @@ interface AqiContextType {
   isLoading: boolean;
   error: string | null;
   lastUpdated: Date | null;
-  aqiStandard: 'us_epa' | 'cpcb_naqi';
-  setAqiStandard: (standard: 'us_epa' | 'cpcb_naqi') => void;
+  aqiStandard: 'us_epa';
   refreshAqi: () => Promise<void>;
 }
 
@@ -18,23 +17,13 @@ const AqiContext = createContext<AqiContextType | undefined>(undefined);
 export const AqiProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { location, setLocation } = useLocation();
 
-  const [aqiStandard, setAqiStandardState] = useState<'us_epa' | 'cpcb_naqi'>(() => {
-    const saved = localStorage.getItem('aeris_preferred_standard');
-    if (saved === 'cpcb_naqi' || saved === 'us_epa') return saved;
-    // Default to CPCB for India, US EPA for others
-    return location.countryCode === 'IN' ? 'cpcb_naqi' : 'us_epa';
-  });
+  const aqiStandard = 'us_epa' as const;
 
   const [currentAqi, setCurrentAqi] = useState<AqiCurrentData | null>(null);
   const [pollutants, setPollutants] = useState<PollutantsData | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-
-  const setAqiStandard = (std: 'us_epa' | 'cpcb_naqi') => {
-    setAqiStandardState(std);
-    localStorage.setItem('aeris_preferred_standard', std);
-  };
 
   const fetchAqiData = useCallback(async () => {
     if (!location.latitude || !location.longitude) return;
@@ -43,7 +32,7 @@ export const AqiProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setError(null);
 
     try {
-      const data = await api.getCurrentAqi(location.latitude, location.longitude, aqiStandard);
+      const data = await api.getCurrentAqi(location.latitude, location.longitude);
       setCurrentAqi(data);
       if (data.pollutants) {
         setPollutants(data.pollutants);
@@ -64,7 +53,7 @@ export const AqiProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } finally {
       setIsLoading(false);
     }
-  }, [location.latitude, location.longitude, aqiStandard]);
+  }, [location.latitude, location.longitude]);
 
   useEffect(() => {
     fetchAqiData();
@@ -82,7 +71,6 @@ export const AqiProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         error,
         lastUpdated,
         aqiStandard,
-        setAqiStandard,
         refreshAqi: fetchAqiData,
       }}
     >
@@ -98,4 +86,3 @@ export const useAqi = () => {
   }
   return context;
 };
-

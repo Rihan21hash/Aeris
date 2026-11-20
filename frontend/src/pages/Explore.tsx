@@ -9,7 +9,7 @@ import { History, Radio } from 'lucide-react';
 
 export const Explore: React.FC = () => {
   const { location, selectSearchResult } = useLocation();
-  const { currentAqi, isLoading: isAqiLoading, aqiStandard } = useAqi();
+  const { currentAqi, isLoading: isAqiLoading } = useAqi();
 
   const [stations, setStations] = useState<MonitoringStation[]>([]);
   const [selectedStation, setSelectedStation] = useState<MonitoringStation | null>(null);
@@ -48,10 +48,10 @@ export const Explore: React.FC = () => {
     <div className="container-fluid p-0">
       {/* Search Header */}
       <div className="mb-4">
-        <h4 style={{ fontWeight: 700, color: '#202124', marginBottom: '8px' }}>
+        <h4 style={{ fontWeight: 800, color: 'var(--color-text-primary)', marginBottom: '8px' }}>
           Explore Global Air Quality
         </h4>
-        <p style={{ color: '#687078', fontSize: '0.9rem', marginBottom: '16px' }}>
+        <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.95rem', marginBottom: '16px' }}>
           Search any city, locality, or geographical coordinates worldwide to view live air quality and physical monitoring stations.
         </p>
 
@@ -62,8 +62,8 @@ export const Explore: React.FC = () => {
         {/* Recent Search Pills */}
         {recentSearches.length > 0 && (
           <div className="d-flex align-items-center gap-2 mt-2 flex-wrap">
-            <span style={{ fontSize: '0.75rem', color: '#687078' }}>
-              <History size={12} className="me-1" />
+            <span style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary)', fontWeight: 600 }}>
+              <History size={14} className="me-1" />
               Recent:
             </span>
             {recentSearches.map((res, i) => (
@@ -72,12 +72,13 @@ export const Explore: React.FC = () => {
                 onClick={() => selectSearchResult(res)}
                 className="btn btn-sm"
                 style={{
-                  fontSize: '0.75rem',
-                  padding: '2px 8px',
+                  fontSize: '0.8rem',
+                  padding: '3px 12px',
                   backgroundColor: '#FFFFFF',
-                  border: '1px solid #E2E5E8',
-                  borderRadius: '12px',
-                  color: '#202124',
+                  border: '1px solid var(--color-border)',
+                  borderRadius: '16px',
+                  color: 'var(--color-text-primary)',
+                  fontWeight: 500,
                 }}
               >
                 {res.name || res.city || res.display_name.split(',')[0]}
@@ -99,14 +100,14 @@ export const Explore: React.FC = () => {
             height="500px"
           />
 
-          <div className="d-flex align-items-center gap-4 mt-3" style={{ fontSize: '0.8rem', color: '#687078' }}>
+          <div className="d-flex align-items-center gap-4 mt-3" style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)' }}>
             <div className="d-flex align-items-center gap-2">
-              <span style={{ width: '12px', height: '12px', borderRadius: '50%', backgroundColor: '#285B50' }} />
-              <span>Selected Coordinates (Model Estimate)</span>
+              <span style={{ width: '12px', height: '12px', borderRadius: '50%', backgroundColor: '#1E3A2F' }} />
+              <span style={{ fontWeight: 500 }}>Selected Coordinates (Model Estimate)</span>
             </div>
             <div className="d-flex align-items-center gap-2">
-              <span style={{ width: '12px', height: '12px', borderRadius: '50%', backgroundColor: '#8E44AD' }} />
-              <span>Verified Physical Stations ({stations.length} nearby)</span>
+              <span style={{ width: '12px', height: '12px', borderRadius: '50%', backgroundColor: '#2B6CB0' }} />
+              <span style={{ fontWeight: 500 }}>Verified Physical Stations ({stations.length} nearby)</span>
             </div>
           </div>
         </div>
@@ -117,33 +118,33 @@ export const Explore: React.FC = () => {
             <div
               style={{
                 backgroundColor: '#FFFFFF',
-                borderRadius: '8px',
-                border: '1px solid #E2E5E8',
-                padding: '20px',
-                boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
+                borderRadius: 'var(--border-radius)',
+                border: '1px solid var(--color-border)',
+                padding: '24px',
+                boxShadow: 'var(--shadow-sm)',
               }}
             >
-              <div className="d-flex align-items-center gap-2 mb-2 text-primary">
-                <Radio size={18} color="#8E44AD" />
-                <h6 className="mb-0" style={{ fontWeight: 700, color: '#202124' }}>
+              <div className="d-flex align-items-center gap-2 mb-2">
+                <Radio size={20} color="#2B6CB0" />
+                <h6 className="mb-0" style={{ fontWeight: 800, color: 'var(--color-text-primary)' }}>
                   Monitoring Station Selected
                 </h6>
               </div>
-              <h5 style={{ fontWeight: 700, color: '#202124', marginBottom: '4px' }}>
+              <h5 style={{ fontWeight: 800, color: 'var(--color-text-primary)', marginBottom: '4px' }}>
                 {selectedStation.name}
               </h5>
-              <p style={{ fontSize: '0.8rem', color: '#687078', marginBottom: '12px' }}>
+              <p style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)', marginBottom: '14px' }}>
                 Source: {selectedStation.source.toUpperCase()} Physical Ground Station
               </p>
               {selectedStation.last_value !== undefined && selectedStation.last_value !== null ? (
-                <div className="mb-2">
-                  <span style={{ fontSize: '0.8rem', color: '#687078' }}>Latest Recorded AQI:</span>
-                  <div style={{ fontSize: '2rem', fontWeight: 700, color: '#202124' }}>
+                <div className="mb-3">
+                  <span style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)', fontWeight: 600 }}>Latest Recorded AQI:</span>
+                  <div style={{ fontSize: '2.75rem', fontWeight: 800, color: 'var(--color-text-primary)', fontVariantNumeric: 'tabular-nums' }}>
                     {selectedStation.last_value}
                   </div>
                 </div>
               ) : (
-                <p style={{ fontSize: '0.85rem', color: '#687078' }}>
+                <p style={{ fontSize: '0.9rem', color: 'var(--color-text-secondary)' }}>
                   Awaiting real-time sensor transmission for this station.
                 </p>
               )}
@@ -161,7 +162,6 @@ export const Explore: React.FC = () => {
               measurementType={currentAqi?.measurement_type}
               source={currentAqi?.source}
               measuredAt={currentAqi?.measured_at}
-              standard={aqiStandard}
               isLoading={isAqiLoading}
             />
           )}
@@ -169,18 +169,19 @@ export const Explore: React.FC = () => {
           <div
             style={{
               backgroundColor: '#FFFFFF',
-              borderRadius: '8px',
-              border: '1px solid #E2E5E8',
-              padding: '16px 20px',
+              borderRadius: 'var(--border-radius)',
+              border: '1px solid var(--color-border)',
+              padding: '20px 22px',
+              boxShadow: 'var(--shadow-sm)',
             }}
           >
-            <h6 style={{ fontSize: '0.9rem', fontWeight: 600, color: '#202124', marginBottom: '8px' }}>
+            <h6 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--color-text-primary)', marginBottom: '8px' }}>
               Nearby Stations Network
             </h6>
-            <p style={{ fontSize: '0.8rem', color: '#687078', marginBottom: '12px' }}>
-              Physical ground stations monitor actual local sensors. Click on any purple station marker on the map to inspect its data.
+            <p style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)', marginBottom: '12px', lineHeight: 1.6 }}>
+              Physical ground stations monitor actual local sensors. Click on any blue marker on the map to inspect its data.
             </p>
-            <div style={{ fontSize: '0.8rem', color: '#285B50', fontWeight: 600 }}>
+            <div style={{ fontSize: '0.88rem', color: '#2B6CB0', fontWeight: 700 }}>
               {stations.length > 0 ? `${stations.length} active stations detected within 50 km` : 'No physical ground stations registered within 50 km'}
             </div>
           </div>

@@ -71,13 +71,14 @@ export const LocationSearch: React.FC<LocationSearchProps> = ({
           display: 'flex',
           alignItems: 'center',
           backgroundColor: '#FFFFFF',
-          border: '1px solid #E2E5E8',
-          borderRadius: '8px',
+          border: '1px solid var(--color-border)',
+          borderRadius: 'var(--border-radius-sm)',
           padding: '8px 12px',
           gap: '10px',
+          transition: 'border-color 0.15s ease, box-shadow 0.15s ease',
         }}
       >
-        <SearchIcon size={18} color="#687078" />
+        <SearchIcon size={18} color="var(--color-primary)" />
         <input
           type="text"
           value={query}
@@ -89,11 +90,11 @@ export const LocationSearch: React.FC<LocationSearchProps> = ({
             outline: 'none',
             width: '100%',
             fontSize: '0.9rem',
-            color: '#202124',
+            color: 'var(--color-text-primary)',
             backgroundColor: 'transparent',
           }}
         />
-        {isLoading && <Loader2 size={16} className="spinner-border spinner-border-sm text-secondary" />}
+        {isLoading && <Loader2 size={16} className="spinner-border spinner-border-sm" style={{ color: 'var(--color-primary)' }} />}
         {query && !isLoading && (
           <button
             onClick={() => setQuery('')}
@@ -102,7 +103,7 @@ export const LocationSearch: React.FC<LocationSearchProps> = ({
               border: 'none',
               padding: 0,
               cursor: 'pointer',
-              color: '#687078',
+              color: 'var(--color-text-muted)',
               display: 'flex',
             }}
           >
@@ -119,9 +120,9 @@ export const LocationSearch: React.FC<LocationSearchProps> = ({
             left: 0,
             right: 0,
             backgroundColor: '#FFFFFF',
-            border: '1px solid #E2E5E8',
-            borderRadius: '8px',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+            border: '1px solid var(--color-border)',
+            borderRadius: 'var(--border-radius)',
+            boxShadow: 'var(--shadow-lg)',
             zIndex: 1000,
             maxHeight: '280px',
             overflowY: 'auto',
@@ -132,25 +133,26 @@ export const LocationSearch: React.FC<LocationSearchProps> = ({
               key={index}
               onClick={() => handleSelect(item)}
               style={{
-                padding: '10px 14px',
-                borderBottom: index < results.length - 1 ? '1px solid #F0F2F4' : 'none',
+                padding: '11px 14px',
+                borderBottom: index < results.length - 1 ? '1px solid var(--color-border-subtle)' : 'none',
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
                 gap: '10px',
+                transition: 'background-color 0.15s ease',
               }}
-              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#F5F6F7')}
+              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#F8F9FA')}
               onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
             >
-              <MapPin size={16} color="#285B50" style={{ flexShrink: 0 }} />
+              <MapPin size={18} color="var(--color-primary)" style={{ flexShrink: 0 }} />
               <div style={{ overflow: 'hidden' }}>
-                <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#202124' }}>
+                <div style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--color-text-primary)' }}>
                   {item.name || item.city || item.display_name.split(',')[0]}
                 </div>
                 <div
                   style={{
-                    fontSize: '0.75rem',
-                    color: '#687078',
+                    fontSize: '0.8rem',
+                    color: 'var(--color-text-secondary)',
                     whiteSpace: 'nowrap',
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
@@ -166,4 +168,3 @@ export const LocationSearch: React.FC<LocationSearchProps> = ({
     </div>
   );
 };
-

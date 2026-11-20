@@ -27,4 +27,4 @@ class UserUpdateRequest(BaseModel):
 
     display_name: str | None = Field(None, max_length=255)
     timezone: str | None = Field(None, max_length=64)
-    preferred_aqi_standard: str | None = Field(None, pattern=r"^(us_epa|cpcb_naqi)$")
+    preferred_aqi_standard: str | None = Field("us_epa", pattern=r"^us_epa$")

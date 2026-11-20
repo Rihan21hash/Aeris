@@ -13,18 +13,18 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
 });
 
-// Custom pin icons
+// Custom pin icons with high visibility
 const createCustomIcon = (color: string, isStation: boolean = false) => {
   return L.divIcon({
     className: 'custom-map-marker',
     html: `
       <div style="
         background-color: ${color};
-        width: ${isStation ? '24px' : '20px'};
-        height: ${isStation ? '24px' : '20px'};
+        width: ${isStation ? '24px' : '22px'};
+        height: ${isStation ? '24px' : '22px'};
         border-radius: 50%;
         border: 2px solid #FFFFFF;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        box-shadow: 0 2px 6px rgba(0,0,0,0.35);
         display: flex;
         align-items: center;
         justify-content: center;
@@ -72,12 +72,12 @@ export const AqiMap: React.FC<AqiMapProps> = ({
   return (
     <div
       style={{
-        borderRadius: '8px',
+        borderRadius: 'var(--border-radius)',
         overflow: 'hidden',
-        border: '1px solid #E2E5E8',
+        border: '1px solid var(--color-border)',
         height,
         width: '100%',
-        boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
+        boxShadow: 'var(--shadow-sm)',
       }}
     >
       <MapContainer
@@ -92,18 +92,18 @@ export const AqiMap: React.FC<AqiMapProps> = ({
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
 
-        {/* User Selected Location Marker (Model Estimate or Primary) */}
-        <Marker position={center} icon={createCustomIcon('#285B50')}>
+        {/* User Selected Location Marker */}
+        <Marker position={center} icon={createCustomIcon('#1E3A2F')}>
           <Popup>
             <div style={{ padding: '4px' }}>
-              <div style={{ fontWeight: 600, fontSize: '0.9rem', color: '#202124' }}>
+              <div style={{ fontWeight: 700, fontSize: '0.95rem', color: '#111827' }}>
                 {locationName}
               </div>
-              <div style={{ fontSize: '0.75rem', color: '#687078', marginBottom: '4px' }}>
+              <div style={{ fontSize: '0.8rem', color: '#4B5563', marginBottom: '4px' }}>
                 Coordinates: {center[0].toFixed(3)}, {center[1].toFixed(3)}
               </div>
               {currentAqi !== null && currentAqi !== undefined && (
-                <div style={{ fontSize: '0.85rem' }}>
+                <div style={{ fontSize: '0.9rem' }}>
                   AQI:{' '}
                   <strong style={{ color: locCat.color }}>
                     {Math.round(currentAqi)} ({locCat.label})
@@ -119,26 +119,26 @@ export const AqiMap: React.FC<AqiMapProps> = ({
           <Marker
             key={st.id}
             position={[st.latitude, st.longitude]}
-            icon={createCustomIcon('#8E44AD', true)}
+            icon={createCustomIcon('#2B6CB0', true)}
             eventHandlers={{
               click: () => onSelectStation?.(st),
             }}
           >
             <Popup>
               <div style={{ padding: '4px' }}>
-                <div style={{ fontWeight: 600, fontSize: '0.9rem', color: '#202124' }}>
+                <div style={{ fontWeight: 700, fontSize: '0.95rem', color: '#111827' }}>
                   {st.name}
                 </div>
-                <div style={{ fontSize: '0.75rem', color: '#687078', marginBottom: '4px' }}>
+                <div style={{ fontSize: '0.8rem', color: '#4B5563', marginBottom: '4px' }}>
                   Source: {st.source.toUpperCase()} (Physical Station)
                 </div>
                 {st.last_value !== undefined && st.last_value !== null && (
-                  <div style={{ fontSize: '0.85rem', color: '#202124' }}>
-                    Latest Reading: <strong>{st.last_value}</strong>
+                  <div style={{ fontSize: '0.9rem', color: '#111827' }}>
+                    Latest Reading: <strong style={{ color: 'var(--color-primary)' }}>{st.last_value}</strong>
                   </div>
                 )}
                 {st.last_updated && (
-                  <div style={{ fontSize: '0.7rem', color: '#9CA3AF', marginTop: '2px' }}>
+                  <div style={{ fontSize: '0.75rem', color: '#6B7280', marginTop: '2px' }}>
                     Updated: {new Date(st.last_updated).toLocaleTimeString()}
                   </div>
                 )}
@@ -150,4 +150,3 @@ export const AqiMap: React.FC<AqiMapProps> = ({
     </div>
   );
 };
-

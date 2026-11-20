@@ -9,9 +9,8 @@ export const DataSourceBadge: React.FC<DataSourceBadgeProps> = ({ source, measur
   const isStation = measurementType === 'station';
 
   const sourceLabels: Record<string, string> = {
-    open_meteo: 'Open-Meteo API',
-    openaq: 'OpenAQ Station Network',
-    cpcb: 'CPCB Official Network',
+    open_meteo: 'Open-Meteo Meteorological Feed',
+    openaq: 'OpenAQ Physical Network',
   };
 
   const label = sourceLabels[source] || source;
@@ -21,16 +20,15 @@ export const DataSourceBadge: React.FC<DataSourceBadgeProps> = ({ source, measur
       <span
         style={{
           display: 'inline-block',
-          width: '8px',
-          height: '8px',
+          width: '9px',
+          height: '9px',
           borderRadius: '50%',
-          backgroundColor: isStation ? '#285B50' : '#4A7C59',
+          backgroundColor: isStation ? 'var(--color-primary)' : 'var(--color-accent-blue)',
         }}
       />
-      <span style={{ fontSize: '0.8rem', color: '#687078', fontWeight: 500 }}>
+      <span style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)', fontWeight: 600 }}>
         {label} ({isStation ? 'Monitoring Station' : 'Model Estimate'})
       </span>
     </div>
   );
 };
-

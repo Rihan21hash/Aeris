@@ -30,7 +30,9 @@ _HOURLY_PARAMS = (
     "us_aqi_carbon_monoxide,us_aqi_ozone,us_aqi_sulphur_dioxide"
 )
 _CURRENT_PARAMS = (
-    "us_aqi,pm10,pm2_5,carbon_monoxide,nitrogen_dioxide,sulphur_dioxide,ozone"
+    "us_aqi,us_aqi_pm2_5,us_aqi_pm10,us_aqi_nitrogen_dioxide,"
+    "us_aqi_carbon_monoxide,us_aqi_ozone,us_aqi_sulphur_dioxide,"
+    "pm10,pm2_5,carbon_monoxide,nitrogen_dioxide,sulphur_dioxide,ozone"
 )
 
 _TIMEOUT = httpx.Timeout(15.0, connect=10.0)
@@ -62,10 +64,21 @@ def _normalise_current(data: dict) -> dict:
     o3_raw = current.get("ozone")  # µg/m³
     us_aqi = current.get("us_aqi")
 
+    # Open-Meteo official EPA pollutant sub-indices
+    epa_sub_indexes = {
+        "pm25": current.get("us_aqi_pm2_5"),
+        "pm10": current.get("us_aqi_pm10"),
+        "co": current.get("us_aqi_carbon_monoxide"),
+        "no2": current.get("us_aqi_nitrogen_dioxide"),
+        "so2": current.get("us_aqi_sulphur_dioxide"),
+        "o3": current.get("us_aqi_ozone"),
+    }
+
     result: dict = {
         "measured_at": measured_at,
         "interval_seconds": interval,
         "us_aqi_openmeteo": us_aqi,
+        "epa_sub_indexes": epa_sub_indexes,
         "source": "open_meteo",
         "measurement_type": "model_estimate",
         "current": {
@@ -95,15 +108,6 @@ def _normalise_current(data: dict) -> dict:
             "so2": round(so2_raw * _SO2_UGM3_TO_PPB, 2) if so2_raw is not None else None,
             "o3": round(o3_raw * _O3_UGM3_TO_PPM, 6) if o3_raw is not None else None,
         },
-        # CPCB-unit concentrations (µg/m³ for gases, mg/m³ for CO)
-        "cpcb_units": {
-            "pm25": pm25_raw,
-            "pm10": pm10_raw,
-            "co": round(co_raw / 1000.0, 3) if co_raw is not None else None,  # µg/m³ → mg/m³
-            "no2": no2_raw,
-            "so2": so2_raw,
-            "o3": o3_raw,
-        },
         # Full raw provider payload blocks for diagnostic transparency
         "raw_provider_current": data.get("current", {}),
         "raw_provider_units": data.get("current_units", {}),
@@ -115,7 +119,7 @@ async def fetch_current_air_quality(lat: float, lon: float) -> dict:
     """Fetch the current air quality reading for the given coordinates.
 
     Returns a normalised dict with raw concentrations and converted values
-    ready for both EPA and CPCB AQI calculation.
+    ready for US EPA AQI calculation.
     """
     params = {
         "latitude": lat,
@@ -137,7 +141,23 @@ async def fetch_current_air_quality(lat: float, lon: float) -> dict:
         logger.error("Open-Meteo API request error: %s", exc)
         raise
 
-    return _normalise_current(data)
+    norm = _normalise_current(data)
+    hourly_records = _parse_hourly(data)
+    norm["hourly"] = hourly_records
+
+    # If any EPA sub-index was not in current, populate from latest matching hourly record
+    if hourly_records:
+        latest = hourly_records[-1]
+        for r in reversed(hourly_records):
+            if r.get("measured_at") == norm.get("measured_at"):
+                latest = r
+                break
+        hourly_epa = latest.get("epa_sub_indexes", {})
+        for pol, val in norm["epa_sub_indexes"].items():
+            if val is None and hourly_epa.get(pol) is not None:
+                norm["epa_sub_indexes"][pol] = hourly_epa.get(pol)
+
+    return norm
 
 
 def _parse_hourly(data: dict) -> list[dict]:
@@ -160,11 +180,21 @@ def _parse_hourly(data: dict) -> list[dict]:
         o3 = hourly.get("ozone", [None] * len(times))[idx] if idx < len(hourly.get("ozone", [])) else None
         us_aqi = hourly.get("us_aqi", [None] * len(times))[idx] if idx < len(hourly.get("us_aqi", [])) else None
 
+        epa_sub_indexes = {
+            "pm25": hourly.get("us_aqi_pm2_5", [None] * len(times))[idx] if idx < len(hourly.get("us_aqi_pm2_5", [])) else None,
+            "pm10": hourly.get("us_aqi_pm10", [None] * len(times))[idx] if idx < len(hourly.get("us_aqi_pm10", [])) else None,
+            "co": hourly.get("us_aqi_carbon_monoxide", [None] * len(times))[idx] if idx < len(hourly.get("us_aqi_carbon_monoxide", [])) else None,
+            "no2": hourly.get("us_aqi_nitrogen_dioxide", [None] * len(times))[idx] if idx < len(hourly.get("us_aqi_nitrogen_dioxide", [])) else None,
+            "so2": hourly.get("us_aqi_sulphur_dioxide", [None] * len(times))[idx] if idx < len(hourly.get("us_aqi_sulphur_dioxide", [])) else None,
+            "o3": hourly.get("us_aqi_ozone", [None] * len(times))[idx] if idx < len(hourly.get("us_aqi_ozone", [])) else None,
+        }
+
         records.append({
             "measured_at": ts,
             "source": "open_meteo",
             "measurement_type": "model_estimate",
             "us_aqi_openmeteo": us_aqi,
+            "epa_sub_indexes": epa_sub_indexes,
             "raw": {
                 "pm25": pm25,
                 "pm10": pm10,
@@ -180,14 +210,6 @@ def _parse_hourly(data: dict) -> list[dict]:
                 "no2": round(no2 * _NO2_UGM3_TO_PPB, 2) if no2 is not None else None,
                 "so2": round(so2 * _SO2_UGM3_TO_PPB, 2) if so2 is not None else None,
                 "o3": round(o3 * _O3_UGM3_TO_PPM, 6) if o3 is not None else None,
-            },
-            "cpcb_units": {
-                "pm25": pm25,
-                "pm10": pm10,
-                "co": round(co / 1000.0, 3) if co is not None else None,
-                "no2": no2,
-                "so2": so2,
-                "o3": o3,
             },
         })
 

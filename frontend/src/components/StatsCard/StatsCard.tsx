@@ -22,28 +22,30 @@ export const StatsCard: React.FC<StatsCardProps> = ({
     <div
       style={{
         backgroundColor: '#FFFFFF',
-        border: '1px solid #E2E5E8',
-        borderRadius: '8px',
-        padding: '16px 20px',
+        border: '1px solid var(--color-border)',
+        borderRadius: 'var(--border-radius)',
+        padding: '20px 22px',
         display: 'flex',
         flexDirection: 'column',
         justifyContent: 'space-between',
         height: '100%',
-        boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
+        boxShadow: 'var(--shadow-sm)',
+        transition: 'transform 0.15s ease, box-shadow 0.15s ease',
       }}
     >
       <div className="d-flex justify-content-between align-items-center mb-2">
-        <span style={{ fontSize: '0.85rem', color: '#687078', fontWeight: 500 }}>{title}</span>
-        {Icon && <Icon size={18} color="#687078" />}
+        <span style={{ fontSize: '0.9rem', color: 'var(--color-text-secondary)', fontWeight: 600 }}>{title}</span>
+        {Icon && <Icon size={20} color="var(--color-primary)" />}
       </div>
 
       <div className="d-flex align-items-baseline gap-2 mb-1">
         <span
           style={{
-            fontSize: '1.75rem',
-            fontWeight: 700,
-            color: '#202124',
+            fontSize: '2rem',
+            fontWeight: 800,
+            color: 'var(--color-text-primary)',
             fontVariantNumeric: 'tabular-nums',
+            letterSpacing: '-0.02em',
           }}
         >
           {value}
@@ -51,12 +53,13 @@ export const StatsCard: React.FC<StatsCardProps> = ({
         {badgeText && (
           <span
             style={{
-              fontSize: '0.75rem',
-              fontWeight: 600,
-              padding: '2px 8px',
+              fontSize: '0.78rem',
+              fontWeight: 700,
+              padding: '2px 10px',
               borderRadius: '12px',
-              backgroundColor: badgeColor ? `${badgeColor}20` : '#F5F6F7',
-              color: badgeColor || '#202124',
+              backgroundColor: badgeColor ? `${badgeColor}15` : '#F1F3F5',
+              color: badgeColor || 'var(--color-primary)',
+              border: `1px solid ${badgeColor ? `${badgeColor}30` : 'var(--color-border)'}`,
             }}
           >
             {badgeText}
@@ -65,9 +68,8 @@ export const StatsCard: React.FC<StatsCardProps> = ({
       </div>
 
       {subtitle && (
-        <span style={{ fontSize: '0.75rem', color: '#687078' }}>{subtitle}</span>
+        <span style={{ fontSize: '0.82rem', color: 'var(--color-text-muted)' }}>{subtitle}</span>
       )}
     </div>
   );
 };
-

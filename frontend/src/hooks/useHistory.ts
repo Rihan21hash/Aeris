@@ -1,7 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api, AqiExtremesData, AqiHistoryData } from '../services/api';
 
-export function useHistory(locationId: number | null, range: '24h' | '7d') {
+export function useHistory(
+  locationId: number | null,
+  range: '24h' | '7d' = '24h'
+) {
   const [history, setHistory] = useState<AqiHistoryData | null>(null);
   const [extremes, setExtremes] = useState<AqiExtremesData | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);

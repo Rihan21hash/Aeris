@@ -32,6 +32,7 @@ class AqiCurrentResponse(BaseModel):
     """Current AQI reading for a location."""
 
     aqi_value: float | None = Field(None, description="Calculated AQI value.")
+    raw_us_aqi: float | None = Field(None, description="Raw Open-Meteo current.us_aqi value.")
     aqi_standard: str = Field("us_epa", description="AQI standard used for calculation.")
     category: str = Field(..., description="Human-readable category, e.g. 'Good'.")
     color: str = Field(..., description="Hex colour associated with the category.")

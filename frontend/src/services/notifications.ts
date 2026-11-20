@@ -49,6 +49,18 @@ export const pushNotifications = {
       throw new Error('Notification permission was not granted.');
     }
 
+    // Force creation of a fresh subscription: unsubscribe any existing
+    // subscription so the browser's push agent is forced to contact the
+    // push service (e.g. Mozilla Autopush / Google FCM) for a brand new, active endpoint
+    try {
+      const existing = await reg.pushManager.getSubscription();
+      if (existing) {
+        await existing.unsubscribe();
+      }
+    } catch (unsubErr) {
+      console.warn('Could not unsubscribe previous subscription before re-subscribing:', unsubErr);
+    }
+
     const convertedKey = urlBase64ToUint8Array(vapidPublicKey);
     return await reg.pushManager.subscribe({
       userVisibleOnly: true,

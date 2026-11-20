@@ -16,11 +16,11 @@ export const History: React.FC = () => {
       {/* Header and Toggle */}
       <div className="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
         <div>
-          <h4 style={{ fontWeight: 700, color: '#202124', marginBottom: '4px' }}>
+          <h4 style={{ fontWeight: 800, color: 'var(--color-text-primary)', marginBottom: '4px' }}>
             Historical Air Quality Analytics
           </h4>
-          <span style={{ fontSize: '0.85rem', color: '#687078' }}>
-            Showing records for <strong>{location.name}</strong>
+          <span style={{ fontSize: '0.9rem', color: 'var(--color-text-secondary)' }}>
+            Showing records for <strong style={{ color: 'var(--color-text-primary)' }}>{location.name}</strong> (US EPA AQI)
           </span>
         </div>
 
@@ -29,20 +29,21 @@ export const History: React.FC = () => {
           className="d-inline-flex p-1"
           style={{
             backgroundColor: '#FFFFFF',
-            border: '1px solid #E2E5E8',
-            borderRadius: '8px',
+            border: '1px solid var(--color-border)',
+            borderRadius: 'var(--border-radius-sm)',
+            boxShadow: 'var(--shadow-sm)',
           }}
         >
           <button
             onClick={() => setTimeRange('24h')}
             className="btn btn-sm"
             style={{
-              padding: '6px 14px',
-              borderRadius: '6px',
-              fontSize: '0.85rem',
-              fontWeight: 600,
-              backgroundColor: timeRange === '24h' ? '#285B50' : 'transparent',
-              color: timeRange === '24h' ? '#FFFFFF' : '#687078',
+              padding: '6px 16px',
+              borderRadius: 'var(--border-radius-sm)',
+              fontSize: '0.88rem',
+              fontWeight: 700,
+              backgroundColor: timeRange === '24h' ? 'var(--color-primary)' : 'transparent',
+              color: timeRange === '24h' ? '#FFFFFF' : 'var(--color-text-secondary)',
               border: 'none',
               transition: 'all 0.15s ease',
             }}
@@ -53,12 +54,12 @@ export const History: React.FC = () => {
             onClick={() => setTimeRange('7d')}
             className="btn btn-sm"
             style={{
-              padding: '6px 14px',
-              borderRadius: '6px',
-              fontSize: '0.85rem',
-              fontWeight: 600,
-              backgroundColor: timeRange === '7d' ? '#285B50' : 'transparent',
-              color: timeRange === '7d' ? '#FFFFFF' : '#687078',
+              padding: '6px 16px',
+              borderRadius: 'var(--border-radius-sm)',
+              fontSize: '0.88rem',
+              fontWeight: 700,
+              backgroundColor: timeRange === '7d' ? 'var(--color-primary)' : 'transparent',
+              color: timeRange === '7d' ? '#FFFFFF' : 'var(--color-text-secondary)',
               border: 'none',
               transition: 'all 0.15s ease',
             }}
@@ -81,7 +82,7 @@ export const History: React.FC = () => {
             }
             icon={ArrowUpRight}
             badgeText={timeRange === '24h' ? 'Peak Hour' : 'Peak Day'}
-            badgeColor="#E53935"
+            badgeColor="#B91C1C"
           />
         </div>
 
@@ -96,7 +97,7 @@ export const History: React.FC = () => {
             }
             icon={ArrowDownRight}
             badgeText={timeRange === '24h' ? 'Cleanest Hour' : 'Cleanest Day'}
-            badgeColor="#00A651"
+            badgeColor="#15803D"
           />
         </div>
 
@@ -107,7 +108,7 @@ export const History: React.FC = () => {
             subtitle={`Derived from ${history?.total_records || 0} timestamped records`}
             icon={Activity}
             badgeText="Mean AQI"
-            badgeColor="#285B50"
+            badgeColor="var(--color-primary)"
           />
         </div>
       </div>
@@ -126,16 +127,17 @@ export const History: React.FC = () => {
       <div
         style={{
           backgroundColor: '#FFFFFF',
-          borderRadius: '8px',
-          border: '1px solid #E2E5E8',
-          padding: '20px',
+          borderRadius: 'var(--border-radius)',
+          border: '1px solid var(--color-border)',
+          padding: '24px',
+          boxShadow: 'var(--shadow-sm)',
         }}
       >
-        <h6 style={{ fontWeight: 600, color: '#202124', fontSize: '0.9rem', marginBottom: '8px' }}>
+        <h6 style={{ fontWeight: 800, color: 'var(--color-text-primary)', fontSize: '1rem', marginBottom: '8px' }}>
           Data Integrity Policy
         </h6>
-        <p style={{ fontSize: '0.85rem', color: '#687078', marginBottom: 0, lineHeight: 1.6 }}>
-          Historical calculations use authentic timestamped records collected from Open-Meteo and monitoring stations. Missing intervals represent actual monitoring gaps and are displayed as discontinuities rather than artificially interpolated or smoothed curves.
+        <p style={{ fontSize: '0.9rem', color: 'var(--color-text-secondary)', marginBottom: 0, lineHeight: 1.6 }}>
+          Historical calculations use authentic timestamped records collected from Open-Meteo and physical monitoring stations. Missing intervals represent actual monitoring gaps and are displayed as discontinuities rather than artificially interpolated or smoothed curves.
         </p>
       </div>
     </div>

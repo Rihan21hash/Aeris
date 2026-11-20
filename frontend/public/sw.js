@@ -1,24 +1,17 @@
-/* AERIS Service Worker */
+/* AERIS Service Worker — v2 */
 
-const CACHE_NAME = 'aeris-cache-v1';
-const STATIC_ASSETS = [
-  '/',
-  '/index.html',
-  '/favicon.svg',
-  '/manifest.json'
-];
+const CACHE_NAME = 'aeris-cache-v2';
 
-/* Install — pre-cache static assets */
+/* Install — skip waiting immediately so new SW takes over */
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(STATIC_ASSETS);
-    })
-  );
+  /* Do NOT pre-cache static assets during install — if any asset
+     returns a non-OK response (e.g. dev server restart) the entire
+     install fails and the SW never activates, breaking push.
+     Instead, cache on first successful fetch. */
   self.skipWaiting();
 });
 
-/* Activate — clean old caches */
+/* Activate — clean old caches and claim all clients */
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => {
@@ -27,9 +20,8 @@ self.addEventListener('activate', (event) => {
           .filter((key) => key !== CACHE_NAME)
           .map((key) => caches.delete(key))
       );
-    })
+    }).then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
 /* Fetch — network-first strategy with cache fallback */
@@ -56,7 +48,7 @@ self.addEventListener('fetch', (event) => {
       .catch(() => {
         // Fallback to cache
         return caches.match(request).then((cached) => {
-          return cached || caches.match('/index.html');
+          return cached || new Response('Offline', { status: 503 });
         });
       })
   );
@@ -64,39 +56,43 @@ self.addEventListener('fetch', (event) => {
 
 /* Push notification handling */
 self.addEventListener('push', (event) => {
+  console.log('[AERIS SW] Push event received');
+
   let data = { title: 'AERIS', body: 'Air quality update available.' };
 
   if (event.data) {
     try {
       data = event.data.json();
-    } catch {
+    } catch (e) {
+      console.warn('[AERIS SW] Could not parse push data as JSON, using text:', e);
       data.body = event.data.text();
     }
   }
 
   const options = {
-    body: data.body,
-    icon: '/favicon.svg',
-    badge: '/favicon.svg',
+    body: data.body || '',
+    icon: data.icon || '/favicon.svg',
+    badge: data.badge || '/favicon.svg',
     tag: data.tag || 'aeris-notification',
-    data: {
-      url: data.url || '/'
-    },
-    actions: data.actions || []
+    renotify: true,
+    requireInteraction: false,
+    data: data.data || { url: '/' },
+    actions: data.actions || [],
   };
 
-  event.waitUntil(self.registration.showNotification(data.title, options));
+  event.waitUntil(self.registration.showNotification(data.title || 'AERIS', options));
 });
 
-/* Notification click — open the app */
+/* Notification click — open or focus the AERIS app */
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
 
-  const targetUrl = event.notification.data?.url || '/';
+  const notifData = event.notification.data || {};
+  const targetUrl = notifData.url || '/';
 
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
-      // Focus existing window if open
+      // Focus existing AERIS window if open
       for (const client of clients) {
         if (client.url.includes(self.location.origin) && 'focus' in client) {
           client.navigate(targetUrl);

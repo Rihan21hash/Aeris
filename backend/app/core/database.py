@@ -10,13 +10,18 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
+from sqlalchemy.pool import NullPool
+
 from app.core.config import settings
 
 engine_kwargs: dict = {
     "echo": False,
-    "pool_pre_ping": True,
 }
-if "sqlite" not in settings.DATABASE_URL:
+if "sqlite" in settings.DATABASE_URL:
+    engine_kwargs["connect_args"] = {"check_same_thread": False, "timeout": 30}
+    engine_kwargs["poolclass"] = NullPool
+else:
+    engine_kwargs["pool_pre_ping"] = True
     engine_kwargs["pool_size"] = 20
     engine_kwargs["max_overflow"] = 10
 

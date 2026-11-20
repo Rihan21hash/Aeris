@@ -3,6 +3,7 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { getFriendlyAuthErrorMessage } from '../utils/firebaseErrors';
 import { Eye, EyeOff, AlertCircle } from 'lucide-react';
+import { AerisLogo } from '../components/Common/AerisLogo';
 
 export const Login: React.FC = () => {
   const { signInWithEmail, signInWithGoogle, resetPassword } = useAuth();
@@ -67,29 +68,26 @@ export const Login: React.FC = () => {
       <div
         style={{
           width: '100%',
-          maxWidth: '420px',
+          maxWidth: '430px',
           backgroundColor: '#FFFFFF',
-          borderRadius: '8px',
-          border: '1px solid #E2E5E8',
-          padding: '36px 32px',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+          borderRadius: 'var(--border-radius)',
+          border: '1px solid var(--color-border)',
+          padding: '38px 34px',
+          boxShadow: 'var(--shadow-md)',
         }}
       >
         {/* Brand header */}
         <div className="text-center mb-4">
           <div className="d-inline-flex align-items-center gap-2 mb-2">
-            <svg width="24" height="24" viewBox="0 0 32 32" fill="none">
-              <circle cx="16" cy="16" r="14" stroke="#285B50" strokeWidth="2.5" />
-              <path d="M10 16C12 12 16 12 18 16C20 20 24 20 26 16" stroke="#285B50" strokeWidth="2.5" strokeLinecap="round" />
-            </svg>
-            <span style={{ fontSize: '1.25rem', fontWeight: 800, color: '#285B50', letterSpacing: '0.08em' }}>
+            <AerisLogo size={36} />
+            <span style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--color-primary)', letterSpacing: '0.08em' }}>
               AERIS
             </span>
           </div>
-          <h4 style={{ fontWeight: 700, color: '#202124', marginBottom: '4px' }}>
+          <h4 style={{ fontWeight: 800, color: 'var(--color-text-primary)', marginBottom: '4px' }}>
             Sign In to AERIS
           </h4>
-          <span style={{ fontSize: '0.85rem', color: '#687078' }}>
+          <span style={{ fontSize: '0.9rem', color: 'var(--color-text-secondary)' }}>
             Access saved locations and customized alerts
           </span>
         </div>
@@ -109,7 +107,7 @@ export const Login: React.FC = () => {
 
         <form onSubmit={handleSubmit}>
           <div className="mb-3">
-            <label className="form-label" style={{ fontSize: '0.85rem', fontWeight: 600, color: '#202124' }}>
+            <label className="form-label">
               Email address
             </label>
             <input
@@ -119,20 +117,19 @@ export const Login: React.FC = () => {
               onChange={(e) => setEmail(e.target.value)}
               className="form-control"
               placeholder="name@example.com"
-              style={{ fontSize: '0.9rem' }}
             />
           </div>
 
           <div className="mb-3">
             <div className="d-flex justify-content-between align-items-center mb-1">
-              <label className="form-label mb-0" style={{ fontSize: '0.85rem', fontWeight: 600, color: '#202124' }}>
+              <label className="form-label mb-0">
                 Password
               </label>
               <button
                 type="button"
                 onClick={handleResetPassword}
                 className="btn btn-link p-0 text-decoration-none"
-                style={{ fontSize: '0.75rem', color: '#285B50' }}
+                style={{ fontSize: '0.8rem', color: 'var(--color-primary)' }}
               >
                 Forgot password?
               </button>
@@ -144,24 +141,24 @@ export const Login: React.FC = () => {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="form-control"
-                style={{ fontSize: '0.9rem', paddingRight: '40px' }}
+                style={{ paddingRight: '40px' }}
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
                 style={{
                   position: 'absolute',
-                  right: '10px',
+                  right: '12px',
                   top: '50%',
                   transform: 'translateY(-50%)',
                   background: 'none',
                   border: 'none',
-                  color: '#687078',
+                  color: 'var(--color-text-muted)',
                   padding: 0,
                   cursor: 'pointer',
                 }}
               >
-                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
             </div>
           </div>
@@ -169,13 +166,10 @@ export const Login: React.FC = () => {
           <button
             type="submit"
             disabled={isLoading}
-            className="btn w-100 mb-3"
+            className="btn btn-primary w-100 mb-3"
             style={{
-              backgroundColor: '#285B50',
-              color: '#FFFFFF',
-              fontWeight: 600,
               padding: '10px',
-              fontSize: '0.9rem',
+              fontSize: '0.95rem',
             }}
           >
             {isLoading ? 'Signing In...' : 'Sign In'}
@@ -183,7 +177,7 @@ export const Login: React.FC = () => {
         </form>
 
         <div className="position-relative text-center my-3">
-          <hr style={{ borderColor: '#E2E5E8' }} />
+          <hr style={{ borderColor: 'var(--color-border)' }} />
           <span
             style={{
               position: 'absolute',
@@ -191,9 +185,10 @@ export const Login: React.FC = () => {
               left: '50%',
               transform: 'translate(-50%, -50%)',
               backgroundColor: '#FFFFFF',
-              padding: '0 10px',
-              fontSize: '0.75rem',
-              color: '#687078',
+              padding: '0 12px',
+              fontSize: '0.8rem',
+              color: 'var(--color-text-muted)',
+              fontWeight: 600,
             }}
           >
             OR
@@ -206,11 +201,11 @@ export const Login: React.FC = () => {
           disabled={isLoading}
           className="btn w-100 d-flex align-items-center justify-content-center gap-2 mb-4"
           style={{
-            border: '1px solid #E2E5E8',
+            border: '1px solid var(--color-border)',
             backgroundColor: '#FFFFFF',
-            color: '#202124',
-            fontSize: '0.9rem',
-            fontWeight: 500,
+            color: 'var(--color-text-primary)',
+            fontSize: '0.92rem',
+            fontWeight: 600,
             padding: '10px',
           }}
         >
@@ -223,9 +218,9 @@ export const Login: React.FC = () => {
           <span>Continue with Google</span>
         </button>
 
-        <div className="text-center" style={{ fontSize: '0.85rem', color: '#687078' }}>
+        <div className="text-center" style={{ fontSize: '0.9rem', color: 'var(--color-text-secondary)' }}>
           Don't have an account?{' '}
-          <NavLink to="/register" style={{ color: '#285B50', fontWeight: 600, textDecoration: 'none' }}>
+          <NavLink to="/register" style={{ color: 'var(--color-primary)', fontWeight: 700, textDecoration: 'none' }}>
             Create one
           </NavLink>
         </div>

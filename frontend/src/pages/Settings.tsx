@@ -1,11 +1,10 @@
 import React, { useState } from 'react';
-import { useAqi } from '../contexts/AqiContext';
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../services/api';
-import { User, Sliders, CheckCircle2 } from 'lucide-react';
+import { User, Sliders, CheckCircle2, ShieldCheck } from 'lucide-react';
+import { NotificationSetup } from '../components/Notifications/NotificationSetup';
 
 export const SettingsPage: React.FC = () => {
-  const { aqiStandard, setAqiStandard } = useAqi();
   const { user, token, signOut } = useAuth();
 
   const [displayName, setDisplayName] = useState(user?.displayName || '');
@@ -22,7 +21,7 @@ export const SettingsPage: React.FC = () => {
       await api.updateCurrentUser(
         {
           display_name: displayName,
-          preferred_aqi_standard: aqiStandard,
+          preferred_aqi_standard: 'us_epa',
         },
         token
       );
@@ -36,13 +35,13 @@ export const SettingsPage: React.FC = () => {
   };
 
   return (
-    <div className="container-fluid p-0" style={{ maxWidth: '800px' }}>
+    <div className="container-fluid p-0" style={{ maxWidth: '820px' }}>
       <div className="mb-4">
-        <h4 style={{ fontWeight: 700, color: '#202124', marginBottom: '4px' }}>
+        <h4 style={{ fontWeight: 800, color: 'var(--color-text-primary)', marginBottom: '4px' }}>
           Platform Settings
         </h4>
-        <p style={{ color: '#687078', fontSize: '0.9rem', marginBottom: 0 }}>
-          Configure air quality index standards, accounts, and application preferences.
+        <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.95rem', marginBottom: 0 }}>
+          Manage notifications, account details, and air quality system preferences.
         </p>
       </div>
 
@@ -51,78 +50,44 @@ export const SettingsPage: React.FC = () => {
         className="mb-4"
         style={{
           backgroundColor: '#FFFFFF',
-          borderRadius: '8px',
-          border: '1px solid #E2E5E8',
+          borderRadius: 'var(--border-radius)',
+          border: '1px solid var(--color-border)',
           padding: '24px',
-          boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
+          boxShadow: 'var(--shadow-sm)',
         }}
       >
-        <div className="d-flex align-items-center gap-2 mb-3">
-          <Sliders size={20} color="#285B50" />
-          <h5 style={{ fontWeight: 700, color: '#202124', marginBottom: 0, fontSize: '1.1rem' }}>
-            Air Quality Calculation Standard
-          </h5>
+        <div className="d-flex align-items-center justify-content-between mb-3">
+          <div className="d-flex align-items-center gap-2">
+            <Sliders size={22} color="var(--color-primary)" />
+            <h5 style={{ fontWeight: 800, color: 'var(--color-text-primary)', marginBottom: 0, fontSize: '1.15rem' }}>
+              Air Quality Calculation Standard
+            </h5>
+          </div>
+          <span className="badge bg-success-subtle text-success border border-success-subtle d-inline-flex align-items-center gap-1" style={{ fontSize: '0.8rem', fontWeight: 700 }}>
+            <ShieldCheck size={13} /> Active Standard
+          </span>
         </div>
 
-        <p style={{ fontSize: '0.85rem', color: '#687078', marginBottom: '16px' }}>
-          Select which national environmental breakpoint formula is applied to raw atmospheric sensor readings.
-        </p>
-
-        <div className="d-flex flex-column gap-3 mb-3">
-          <label
-            className="d-flex align-items-start gap-3 p-3"
-            style={{
-              borderRadius: '8px',
-              border: aqiStandard === 'us_epa' ? '2px solid #285B50' : '1px solid #E2E5E8',
-              backgroundColor: aqiStandard === 'us_epa' ? '#EDF4F2' : '#FFFFFF',
-              cursor: 'pointer',
-            }}
-          >
-            <input
-              type="radio"
-              name="aqiStandard"
-              value="us_epa"
-              checked={aqiStandard === 'us_epa'}
-              onChange={() => setAqiStandard('us_epa')}
-              style={{ marginTop: '4px', accentColor: '#285B50' }}
-            />
-            <div>
-              <div style={{ fontWeight: 700, color: '#202124', fontSize: '0.95rem' }}>
-                United States EPA AQI
-              </div>
-              <div style={{ fontSize: '0.8rem', color: '#687078', marginTop: '2px' }}>
-                Global benchmark used internationally. Breakpoints derived from US Clean Air Act criteria: Good (0-50), Moderate (51-100), Unhealthy for Sensitive Groups (101-150), Unhealthy (151-200), Very Unhealthy (201-300), Hazardous (301-500).
-              </div>
-            </div>
-          </label>
-
-          <label
-            className="d-flex align-items-start gap-3 p-3"
-            style={{
-              borderRadius: '8px',
-              border: aqiStandard === 'cpcb_naqi' ? '2px solid #285B50' : '1px solid #E2E5E8',
-              backgroundColor: aqiStandard === 'cpcb_naqi' ? '#EDF4F2' : '#FFFFFF',
-              cursor: 'pointer',
-            }}
-          >
-            <input
-              type="radio"
-              name="aqiStandard"
-              value="cpcb_naqi"
-              checked={aqiStandard === 'cpcb_naqi'}
-              onChange={() => setAqiStandard('cpcb_naqi')}
-              style={{ marginTop: '4px', accentColor: '#285B50' }}
-            />
-            <div>
-              <div style={{ fontWeight: 700, color: '#202124', fontSize: '0.95rem' }}>
-                Indian Central Pollution Control Board (CPCB) NAQI
-              </div>
-              <div style={{ fontSize: '0.8rem', color: '#687078', marginTop: '2px' }}>
-                Official standard of India. Evaluates sub-indices across 6 categories: Good (0-50), Satisfactory (51-100), Moderate (101-200), Poor (201-300), Very Poor (301-400), Severe (401-500). Requires minimum 3 pollutants.
-              </div>
-            </div>
-          </label>
+        <div
+          className="p-3"
+          style={{
+            borderRadius: 'var(--border-radius-sm)',
+            border: '2px solid var(--color-primary)',
+            backgroundColor: '#EDF4F2',
+          }}
+        >
+          <div style={{ fontWeight: 800, color: 'var(--color-text-primary)', fontSize: '1.05rem' }}>
+            United States EPA AQI
+          </div>
+          <div style={{ fontSize: '0.88rem', color: 'var(--color-text-secondary)', marginTop: '4px', lineHeight: 1.6 }}>
+            AERIS operates exclusively under the official US EPA Air Quality Index standard. Breakpoints follow US Clean Air Act criteria across 6 severity tiers: Good (0–50), Moderate (51–100), Unhealthy for Sensitive Groups (101–150), Unhealthy (151–200), Very Unhealthy (201–300), and Hazardous (301–500).
+          </div>
         </div>
+      </div>
+
+      {/* Notifications Configuration Section */}
+      <div className="mb-4">
+        <NotificationSetup />
       </div>
 
       {/* Account Settings */}
@@ -130,49 +95,49 @@ export const SettingsPage: React.FC = () => {
         <div
           style={{
             backgroundColor: '#FFFFFF',
-            borderRadius: '8px',
-            border: '1px solid #E2E5E8',
+            borderRadius: 'var(--border-radius)',
+            border: '1px solid var(--color-border)',
             padding: '24px',
-            boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
+            boxShadow: 'var(--shadow-sm)',
           }}
         >
           <div className="d-flex align-items-center gap-2 mb-3">
-            <User size={20} color="#285B50" />
-            <h5 style={{ fontWeight: 700, color: '#202124', marginBottom: 0, fontSize: '1.1rem' }}>
+            <User size={22} color="var(--color-primary)" />
+            <h5 style={{ fontWeight: 800, color: 'var(--color-text-primary)', marginBottom: 0, fontSize: '1.15rem' }}>
               Account Profile
             </h5>
           </div>
 
           {saveSuccess && (
-            <div className="alert alert-success d-flex align-items-center gap-2 p-2 mb-3" style={{ fontSize: '0.85rem' }}>
-              <CheckCircle2 size={16} />
+            <div className="alert alert-success d-flex align-items-center gap-2 p-2 mb-3" style={{ fontSize: '0.9rem' }}>
+              <CheckCircle2 size={18} />
               <span>Profile updated successfully.</span>
             </div>
           )}
 
           <form onSubmit={handleUpdateProfile}>
             <div className="mb-3">
-              <label className="form-label" style={{ fontSize: '0.85rem', color: '#687078' }}>
+              <label className="form-label" style={{ fontSize: '0.9rem', color: 'var(--color-text-secondary)' }}>
                 Email Address
               </label>
               <input
                 type="email"
                 disabled
                 value={user.email || ''}
-                className="form-control form-control-sm"
-                style={{ backgroundColor: '#F5F6F7' }}
+                className="form-control"
+                style={{ backgroundColor: '#F8F9FA', color: '#6B7280' }}
               />
             </div>
 
             <div className="mb-3">
-              <label className="form-label" style={{ fontSize: '0.85rem', color: '#687078' }}>
+              <label className="form-label" style={{ fontSize: '0.9rem', color: 'var(--color-text-secondary)' }}>
                 Display Name
               </label>
               <input
                 type="text"
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
-                className="form-control form-control-sm"
+                className="form-control"
               />
             </div>
 
@@ -180,8 +145,8 @@ export const SettingsPage: React.FC = () => {
               <button
                 type="submit"
                 disabled={isSaving}
-                className="btn btn-sm px-4"
-                style={{ backgroundColor: '#285B50', color: '#FFFFFF', fontWeight: 600 }}
+                className="btn btn-primary btn-sm px-4"
+                style={{ padding: '8px 20px', fontSize: '0.9rem' }}
               >
                 {isSaving ? 'Saving...' : 'Save Profile'}
               </button>
@@ -190,6 +155,7 @@ export const SettingsPage: React.FC = () => {
                 type="button"
                 onClick={() => signOut()}
                 className="btn btn-sm btn-outline-danger"
+                style={{ padding: '8px 18px', fontSize: '0.9rem' }}
               >
                 Sign Out
               </button>

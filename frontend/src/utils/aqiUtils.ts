@@ -1,6 +1,6 @@
 /**
- * AQI utilities for AERIS.
- * Supports both US EPA AQI and Indian CPCB National AQI standards.
+ * US EPA AQI utilities for AERIS.
+ * High-contrast, accessible colors strictly adhering to US EPA standards.
  */
 
 export interface AqiCategoryInfo {
@@ -11,82 +11,96 @@ export interface AqiCategoryInfo {
 }
 
 export const EPA_CATEGORIES: Array<{ min: number; max: number; label: string; color: string; textColor: string }> = [
-  { min: 0, max: 50, label: 'Good', color: '#00A651', textColor: '#FFFFFF' },
-  { min: 51, max: 100, label: 'Moderate', color: '#F5D000', textColor: '#202124' },
-  { min: 101, max: 150, label: 'Unhealthy for Sensitive Groups', color: '#FF8C00', textColor: '#FFFFFF' },
-  { min: 151, max: 200, label: 'Unhealthy', color: '#E53935', textColor: '#FFFFFF' },
-  { min: 201, max: 300, label: 'Very Unhealthy', color: '#8E44AD', textColor: '#FFFFFF' },
+  { min: 0, max: 50, label: 'Good', color: '#00E400', textColor: '#111827' },
+  { min: 51, max: 100, label: 'Moderate', color: '#FFFF00', textColor: '#111827' },
+  { min: 101, max: 150, label: 'Unhealthy for Sensitive Groups', color: '#FF7E00', textColor: '#FFFFFF' },
+  { min: 151, max: 200, label: 'Unhealthy', color: '#FF0000', textColor: '#FFFFFF' },
+  { min: 201, max: 300, label: 'Very Unhealthy', color: '#8F3F97', textColor: '#FFFFFF' },
   { min: 301, max: 500, label: 'Hazardous', color: '#7E0023', textColor: '#FFFFFF' },
 ];
 
-export const CPCB_CATEGORIES: Array<{ min: number; max: number; label: string; color: string; textColor: string }> = [
-  { min: 0, max: 50, label: 'Good', color: '#00A651', textColor: '#FFFFFF' },
-  { min: 51, max: 100, label: 'Satisfactory', color: '#84CF33', textColor: '#202124' },
-  { min: 101, max: 200, label: 'Moderate', color: '#F5D000', textColor: '#202124' },
-  { min: 201, max: 300, label: 'Poor', color: '#FF8C00', textColor: '#FFFFFF' },
-  { min: 301, max: 400, label: 'Very Poor', color: '#E53935', textColor: '#FFFFFF' },
-  { min: 401, max: 500, label: 'Severe', color: '#7E0023', textColor: '#FFFFFF' },
+/** Official US EPA AQI color scale for card tinting */
+export const EPA_COLORS: Array<{ min: number; max: number; color: string; bg: string; border: string }> = [
+  { min: 0, max: 50, color: '#00E400', bg: 'rgba(0, 228, 0, 0.08)', border: 'rgba(0, 228, 0, 0.25)' },
+  { min: 51, max: 100, color: '#FFFF00', bg: 'rgba(255, 255, 0, 0.08)', border: 'rgba(255, 255, 0, 0.3)' },
+  { min: 101, max: 150, color: '#FF7E00', bg: 'rgba(255, 126, 0, 0.08)', border: 'rgba(255, 126, 0, 0.3)' },
+  { min: 151, max: 200, color: '#FF0000', bg: 'rgba(255, 0, 0, 0.07)', border: 'rgba(255, 0, 0, 0.25)' },
+  { min: 201, max: 300, color: '#8F3F97', bg: 'rgba(143, 63, 151, 0.07)', border: 'rgba(143, 63, 151, 0.25)' },
+  { min: 301, max: 500, color: '#7E0023', bg: 'rgba(126, 0, 35, 0.07)', border: 'rgba(126, 0, 35, 0.25)' },
 ];
 
-export function getAqiCategory(value: number | null | undefined, standard: 'us_epa' | 'cpcb_naqi' = 'us_epa'): AqiCategoryInfo {
+/** Get the dynamic card colors for a given US EPA AQI value */
+export function getAqiCardColors(
+  value: number | null | undefined,
+  _standard?: string
+): { color: string; bg: string; border: string; numberColor: string } {
+  const neutral = { color: '#6B7280', bg: '#F9FAFB', border: '#E5E7EB', numberColor: '#6B7280' };
+  if (value === null || value === undefined || isNaN(value)) return neutral;
+
+  for (const row of EPA_COLORS) {
+    if (value <= row.max) {
+      // For Yellow range, use dark readable text
+      const needsDarkText = row.color === '#FFFF00';
+      return {
+        color: row.color,
+        bg: row.bg,
+        border: row.border,
+        numberColor: needsDarkText ? '#78650A' : row.color,
+      };
+    }
+  }
+  const last = EPA_COLORS[EPA_COLORS.length - 1];
+  return { color: last.color, bg: last.bg, border: last.border, numberColor: last.color };
+}
+
+export function getAqiCategory(value: number | null | undefined, _standard?: string): AqiCategoryInfo {
   if (value === null || value === undefined || isNaN(value)) {
     return {
       label: 'Unavailable',
-      color: '#687078',
+      color: '#6B7280',
       textColor: '#FFFFFF',
       description: 'Air quality data is currently unavailable.',
     };
   }
 
-  const table = standard === 'cpcb_naqi' ? CPCB_CATEGORIES : EPA_CATEGORIES;
-  for (const cat of table) {
+  for (const cat of EPA_CATEGORIES) {
     if (value <= cat.max) {
       return {
         label: cat.label,
         color: cat.color,
         textColor: cat.textColor,
-        description: getHealthRecommendation(value, standard),
+        description: getHealthRecommendation(value),
       };
     }
   }
 
-  const last = table[table.length - 1];
+  const last = EPA_CATEGORIES[EPA_CATEGORIES.length - 1];
   return {
     label: last.label,
     color: last.color,
     textColor: last.textColor,
-    description: getHealthRecommendation(value, standard),
+    description: getHealthRecommendation(value),
   };
 }
 
-export function getAqiColor(value: number | null | undefined, standard: 'us_epa' | 'cpcb_naqi' = 'us_epa'): string {
-  return getAqiCategory(value, standard).color;
+export function getAqiColor(value: number | null | undefined, _standard?: string): string {
+  return getAqiCategory(value).color;
 }
 
-export function getHealthRecommendation(value: number | null | undefined, standard: 'us_epa' | 'cpcb_naqi' = 'us_epa'): string {
+export function getHealthRecommendation(value: number | null | undefined, _standard?: string): string {
   if (value === null || value === undefined) {
     return 'No recommendations available.';
   }
 
-  if (standard === 'cpcb_naqi') {
-    if (value <= 50) return 'Minimal impact. Normal outdoor activities.';
-    if (value <= 100) return 'Minor breathing discomfort to sensitive people.';
-    if (value <= 200) return 'Breathing discomfort to the people with lungs, asthma and heart diseases.';
-    if (value <= 300) return 'Breathing discomfort to most people on prolonged exposure.';
-    if (value <= 400) return 'Respiratory illness on prolonged exposure. Avoid strenuous outdoor activities.';
-    return 'Affects healthy people and seriously impacts those with existing diseases. Avoid outdoor exposure.';
-  } else {
-    if (value <= 50) return 'Air quality is satisfactory and poses little or no risk.';
-    if (value <= 100) return 'Air quality is acceptable. Unusually sensitive individuals should consider limiting prolonged outdoor exertion.';
-    if (value <= 150) return 'Members of sensitive groups may experience health effects. General public is less likely to be affected.';
-    if (value <= 200) return 'Some members of the general public may experience health effects. Sensitive groups should avoid prolonged outdoor exertion.';
-    if (value <= 300) return 'Health alert: The risk of health effects is increased for everyone. Avoid prolonged outdoor exertion.';
-    return 'Health warning of emergency conditions: Everyone is more likely to be affected. Avoid all outdoor physical activities.';
-  }
+  if (value <= 50) return 'Air quality is satisfactory and poses little or no risk.';
+  if (value <= 100) return 'Air quality is acceptable. Unusually sensitive individuals should consider limiting prolonged outdoor exertion.';
+  if (value <= 150) return 'Members of sensitive groups may experience health effects. General public is less likely to be affected.';
+  if (value <= 200) return 'Some members of the general public may experience health effects. Sensitive groups should avoid prolonged outdoor exertion.';
+  if (value <= 300) return 'Health alert: The risk of health effects is increased for everyone. Avoid prolonged outdoor exertion.';
+  return 'Health warning of emergency conditions: Everyone is more likely to be affected. Avoid all outdoor physical activities.';
 }
 
 export function formatAqiValue(value: number | null | undefined): string {
   if (value === null || value === undefined || isNaN(value)) return '—';
   return Math.round(value).toString();
 }
-

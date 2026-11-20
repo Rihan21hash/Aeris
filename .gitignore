@@ -42,3 +42,13 @@ Thumbs.db
 firebase-debug.log
 firebaseServiceAccountKey.json
 
+# Database backups
+*.db.bak
+*.sqlite
+
+# Python test cache
+.pytest_cache/
+
+# TypeScript build cache
+*.tsbuildinfo
+*.db.bak
